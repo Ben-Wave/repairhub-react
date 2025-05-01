@@ -25,7 +25,9 @@ const DeviceDetails = () => {
   
   useEffect(() => {
     if (device?.model) {
-      getParts(device.model);
+      // Extrahiere Basis-Modellname (z.B. "iPhone 13" aus "iPhone 13 Pro Max")
+      const baseModel = device.model.split(' ').slice(0, 2).join(' ');
+      getParts(baseModel);
     }
     // eslint-disable-next-line
   }, [device?.model]);

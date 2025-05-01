@@ -1,6 +1,8 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Repairhub",
+  "name": "Repairhub - Smartphone Manager",
+  "description": "Manage your smartphone repairs efficiently with Repairhub.",
+  "dir": "ltr",
   "icons": [
     {
       "src": "favicon.ico",
