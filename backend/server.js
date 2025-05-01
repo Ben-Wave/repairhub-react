@@ -417,7 +417,7 @@ app.get('/api/parts/:id', async (req, res) => {
     }
     res.json(part);
   } catch (error) {
-    res.status 500).json({ error: 'Fehler beim Abrufen des Ersatzteils' });
+    res.status(500).json({ error: 'Fehler beim Abrufen des Ersatzteils' });
   }
 });
 
