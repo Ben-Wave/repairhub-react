@@ -23,12 +23,14 @@ const DeviceDetails = () => {
     // eslint-disable-next-line
   }, [id]);
   
-  
   useEffect(() => {
     if (device?.model) {
+      // Extract model code like [A2628] from the model string
       const modelCodeMatch = device.model.match(/\[A\d+\]/);
       if (modelCodeMatch) {
-        getParts(device.model); // Send the full model string to include the model code
+        getParts(modelCodeMatch[0]); // Send only the model code to getParts
+      } else {
+        getParts(device.model); // Fallback to full model name
       }
     }
     // eslint-disable-next-line
