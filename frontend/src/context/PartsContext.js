@@ -2,7 +2,7 @@ import React, { createContext, useReducer } from 'react';
 import partsReducer from './PartsReducer';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.88:5000/api';;
 
 const initialState = {
   parts: [],

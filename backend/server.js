@@ -13,8 +13,8 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Verbindung
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartphone-manager')
-  .then(() => console.log('MongoDB verbunden'))
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://192.168.178.102:27017/smartphone-manager')
+  .then(() => console.log('MongoDB verbunden',process.env.MONGODB_URI))
   .catch(err => console.error('MongoDB Verbindungsfehler:', err));
 
 // Schemas
