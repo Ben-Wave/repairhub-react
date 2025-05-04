@@ -23,6 +23,7 @@ const partSchema = new mongoose.Schema({
   description: { type: String, required: true },
   price: { type: Number, required: true },
   forModel: { type: String, required: true },
+  category: { type: String, required: true }, // z.B. "Charging Port", "Screen", "Battery", etc.
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -205,7 +206,7 @@ app.delete('/api/devices/:id', async (req, res) => {
 // Ersatzteile-Routen
 app.post('/api/parts', async (req, res) => {
   try {
-    const { partNumber, description, price, forModel } = req.body;
+    const { partNumber, description, price, forModel, category } = req.body;
     
     const existingPart = await Part.findOne({ partNumber });
     if (existingPart) {
@@ -216,7 +217,8 @@ app.post('/api/parts', async (req, res) => {
       partNumber,
       description,
       price,
-      forModel
+      forModel,
+      category
     });
     
     await newPart.save();
@@ -232,16 +234,7 @@ app.get('/api/parts', async (req, res) => {
     let query = {};
     
     if (forModel) {
-      // Extrahiere den Modelcode (z.B. [A2221])
-      const modelCodeMatch = forModel.match(/\[A\d+\]/);
-      
-      if (modelCodeMatch) {
-        // Suche nach dem spezifischen Modelcode in forModel
-        query.forModel = { $regex: modelCodeMatch[0], $options: 'i' };
-      } else {
-        // Fallback: Suche nach dem kompletten Modellnamen
-        query.forModel = { $regex: forModel, $options: 'i' };
-      }
+      query.forModel = { $regex: forModel, $options: 'i' };
     }
     
     const parts = await Part.find(query).sort({ partNumber: 1 });
@@ -265,7 +258,7 @@ app.get('/api/parts/:id', async (req, res) => {
 
 app.put('/api/parts/:id', async (req, res) => {
   try {
-    const { partNumber, description, price, forModel } = req.body;
+    const { partNumber, description, price, forModel, category } = req.body;
     
     const part = await Part.findById(req.params.id);
     if (!part) {
@@ -284,6 +277,7 @@ app.put('/api/parts/:id', async (req, res) => {
     part.description = description;
     part.price = price;
     part.forModel = forModel;
+    if (category) part.category = category;
     
     await part.save();
     res.json(part);

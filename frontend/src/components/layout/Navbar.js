@@ -6,7 +6,7 @@ const Navbar = () => {
     <nav className="bg-blue-900 text-white shadow-md">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
-          <Link to="/" className="text-xl font-bold">Repairhub</Link>
+          <Link to="/" className="text-xl font-bold">Smartphone Manager</Link>
           
           <div className="hidden md:flex space-x-6">
             <NavLink 
@@ -33,6 +33,14 @@ const Navbar = () => {
               }
             >
               Ersatzteile
+            </NavLink>
+            <NavLink 
+              to="/calculator" 
+              className={({ isActive }) => 
+                isActive ? "font-medium border-b-2 border-white" : "hover:text-blue-200"
+              }
+            >
+              Kalkulator
             </NavLink>
           </div>
           
@@ -72,6 +80,14 @@ const Navbar = () => {
           }
         >
           Ersatzteile
+        </NavLink>
+        <NavLink 
+          to="/calculator" 
+          className={({ isActive }) => 
+            isActive ? "block py-2 font-medium" : "block py-2 hover:text-blue-200"
+          }
+        >
+          Kalkulator
         </NavLink>
       </div>
     </nav>

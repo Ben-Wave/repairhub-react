@@ -149,6 +149,7 @@ const PartsList = () => {
                 <tr>
                   <th className="py-3 px-4 text-left">Teilenummer</th>
                   <th className="py-3 px-4 text-left">Beschreibung</th>
+                  <th className="py-3 px-4 text-left">Kategorie</th>
                   <th className="py-3 px-4 text-left">Für Modell</th>
                   <th className="py-3 px-4 text-right">Preis</th>
                   <th className="py-3 px-4 text-center">Aktionen</th>
@@ -163,9 +164,16 @@ const PartsList = () => {
                   >
                     <td className="py-3 px-4 font-medium">{part.partNumber}</td>
                     <td className="py-3 px-4">{part.description}</td>
+                    <td className="py-3 px-4">{part.category || '-'}</td>
                     <td className="py-3 px-4">{part.forModel}</td>
                     <td className="py-3 px-4 text-right">{part.price.toFixed(2)} €</td>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleEdit(part)}
+                        className="text-blue-600 hover:text-blue-800 mr-3"
+                      >
+                        Bearbeiten
+                      </button>
                       <button
                         onClick={() => handleDelete(part)}
                         className="text-red-600 hover:text-red-800"

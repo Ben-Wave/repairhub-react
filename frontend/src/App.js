@@ -10,6 +10,7 @@ import AddDevice from './components/devices/AddDevice';
 import EditDevice from './components/devices/EditDevice';
 import PartsList from './components/parts/PartsList';
 import AddPart from './components/parts/AddPart';
+import PriceCalculator from './components/tools/PriceCalculator';
 import NotFound from './components/pages/NotFound';
 import './App.css';
 
@@ -29,11 +30,12 @@ function App() {
                 <Route path="/devices/edit/:id" element={<EditDevice />} />
                 <Route path="/parts" element={<PartsList />} />
                 <Route path="/parts/add" element={<AddPart />} />
+                <Route path="/calculator" element={<PriceCalculator />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </main>
             <footer className="bg-blue-900 text-white p-4 text-center">
-              <p>&copy; {new Date().getFullYear()} Repairhub</p>
+              <p>&copy; {new Date().getFullYear()} Smartphone Manager</p>
             </footer>
           </div>
         </Router>

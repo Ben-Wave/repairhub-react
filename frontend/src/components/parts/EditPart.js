@@ -8,7 +8,8 @@ const EditPart = ({ part, onClose, onSave }) => {
     partNumber: '',
     description: '',
     forModel: '',
-    price: ''
+    price: '',
+    category: ''
   });
   const [alert, setAlert] = useState(null);
 
@@ -18,7 +19,8 @@ const EditPart = ({ part, onClose, onSave }) => {
         partNumber: part.partNumber,
         description: part.description,
         forModel: part.forModel,
-        price: part.price.toString()
+        price: part.price.toString(),
+        category: part.category || ''
       });
     }
   }, [part]);
@@ -30,8 +32,8 @@ const EditPart = ({ part, onClose, onSave }) => {
   const onSubmit = async e => {
     e.preventDefault();
 
-    if (!formData.partNumber || !formData.description || !formData.forModel || !formData.price) {
-      setAlert('Bitte füllen Sie alle Felder aus');
+    if (!formData.partNumber || !formData.description || !formData.forModel || !formData.price || !formData.category) {
+      setAlert('Bitte füllen Sie alle Felder aus.');
       return;
     }
 
@@ -94,6 +96,21 @@ const EditPart = ({ part, onClose, onSave }) => {
                 id="forModel"
                 name="forModel"
                 value={formData.forModel}
+                onChange={onChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="category" className="block text-gray-700 font-medium mb-2">
+                Kategorie
+              </label>
+              <input
+                type="text"
+                id="category"
+                name="category"
+                value={formData.category}
                 onChange={onChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
