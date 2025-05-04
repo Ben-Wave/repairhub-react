@@ -2,12 +2,16 @@ import React, { useEffect, useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PartsContext } from '../../context/PartsContext';
 import Spinner from '../layout/Spinner';
+import EditPart from './EditPart';
+import Alert from '../layout/Alert';
 
 const PartsList = () => {
-  const { parts, loading, getParts } = useContext(PartsContext);
+  const { parts, loading, getParts, updatePart, deletePart, error, clearErrors } = useContext(PartsContext);
   const [filteredParts, setFilteredParts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterModel, setFilterModel] = useState('');
+  const [editingPart, setEditingPart] = useState(null);
+  const [alert, setAlert] = useState(null);
 
   useEffect(() => {
     getParts();
@@ -41,6 +45,31 @@ const PartsList = () => {
     setFilteredParts(filtered);
   };
 
+  const handleEdit = (part) => {
+    setEditingPart(part);
+  };
+
+  const handleSaveEdit = async (id, partData) => {
+    try {
+      await updatePart(id, partData);
+      setAlert({ type: 'success', message: 'Ersatzteil erfolgreich aktualisiert' });
+      setEditingPart(null);
+    } catch (err) {
+      setAlert({ type: 'error', message: 'Fehler beim Aktualisieren des Ersatzteils' });
+    }
+  };
+
+  const handleDelete = async (part) => {
+    if (window.confirm(`Möchten Sie das Ersatzteil "${part.partNumber}" wirklich löschen?`)) {
+      try {
+        await deletePart(part._id);
+        setAlert({ type: 'success', message: 'Ersatzteil erfolgreich gelöscht' });
+      } catch (err) {
+        setAlert({ type: 'error', message: 'Fehler beim Löschen des Ersatzteils' });
+      }
+    }
+  };
+
   if (loading) {
     return <Spinner />;
   }
@@ -59,6 +88,22 @@ const PartsList = () => {
           Neues Ersatzteil hinzufügen
         </Link>
       </div>
+
+      {alert && (
+        <Alert 
+          message={alert.message} 
+          type={alert.type} 
+          onClose={() => setAlert(null)} 
+        />
+      )}
+
+      {error && (
+        <Alert 
+          message={error} 
+          type="error" 
+          onClose={clearErrors} 
+        />
+      )}
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-8">
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -104,17 +149,38 @@ const PartsList = () => {
                 <tr>
                   <th className="py-3 px-4 text-left">Teilenummer</th>
                   <th className="py-3 px-4 text-left">Beschreibung</th>
+                  <th className="py-3 px-4 text-left">Kategorie</th>
                   <th className="py-3 px-4 text-left">Für Modell</th>
                   <th className="py-3 px-4 text-right">Preis</th>
+                  <th className="py-3 px-4 text-center">Aktionen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredParts.map(part => (
-                  <tr key={part._id} className="hover:bg-gray-50">
+                  <tr 
+                    key={part._id} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleEdit(part)}
+                  >
                     <td className="py-3 px-4 font-medium">{part.partNumber}</td>
                     <td className="py-3 px-4">{part.description}</td>
+                    <td className="py-3 px-4">{part.category || '-'}</td>
                     <td className="py-3 px-4">{part.forModel}</td>
                     <td className="py-3 px-4 text-right">{part.price.toFixed(2)} €</td>
+                    <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleEdit(part)}
+                        className="text-blue-600 hover:text-blue-800 mr-3"
+                      >
+                        Bearbeiten
+                      </button>
+                      <button
+                        onClick={() => handleDelete(part)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Löschen
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -122,6 +188,14 @@ const PartsList = () => {
           </div>
         )}
       </div>
+
+      {editingPart && (
+        <EditPart
+          part={editingPart}
+          onClose={() => setEditingPart(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   );
 };

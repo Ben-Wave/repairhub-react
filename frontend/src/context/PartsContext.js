@@ -2,7 +2,7 @@ import React, { createContext, useReducer } from 'react';
 import partsReducer from './PartsReducer';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.88:5000/api';;
+const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.102:5000/api';
 
 const initialState = {
   parts: [],
@@ -66,6 +66,39 @@ export const PartsProvider = ({ children }) => {
     }
   };
 
+  const updatePart = async (id, partData) => {
+    try {
+      const res = await axios.put(`${API_URL}/parts/${id}`, partData);
+      dispatch({
+        type: 'UPDATE_PART',
+        payload: res.data
+      });
+      return res.data;
+    } catch (err) {
+      dispatch({
+        type: 'PARTS_ERROR',
+        payload: err.response?.data?.error || 'Fehler beim Aktualisieren des Ersatzteils'
+      });
+      throw err;
+    }
+  };
+
+  const deletePart = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/parts/${id}`);
+      dispatch({
+        type: 'DELETE_PART',
+        payload: id
+      });
+    } catch (err) {
+      dispatch({
+        type: 'PARTS_ERROR',
+        payload: err.response?.data?.error || 'Fehler beim Löschen des Ersatzteils'
+      });
+      throw err;
+    }
+  };
+
   const clearErrors = () => {
     dispatch({ type: 'CLEAR_ERRORS' });
   };
@@ -84,6 +117,8 @@ export const PartsProvider = ({ children }) => {
         getParts,
         getPart,
         addPart,
+        updatePart,
+        deletePart,
         clearErrors
       }}
     >
