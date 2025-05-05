@@ -234,12 +234,28 @@ app.get('/api/parts', async (req, res) => {
     let query = {};
     
     if (forModel) {
-      query.forModel = { $regex: forModel, $options: 'i' };
+      // Entferne Farbangaben und nicht wesentliche Details aus dem Modellnamen
+      const simplifiedModel = forModel
+        .replace(/\s+(Black|White|Red|Blue|Green|Yellow|Purple|Pink|Starlight|Midnight|Silver|Gold|Graphite|Sierra Blue|Alpine Green|Product RED|Pacific Blue)\s+/, ' ')
+        .replace(/\s+\d+GB\s+/, ' ')
+        .trim();
+      
+      console.log('Original model query:', forModel);
+      console.log('Simplified model query:', simplifiedModel);
+      
+      // Verwende regulären Ausdruck mit erweiterten Optionen
+      query.forModel = { 
+        $regex: simplifiedModel, 
+        $options: 'i' // i für case-insensitive
+      };
     }
     
+    console.log('MongoDB query:', query);
     const parts = await Part.find(query).sort({ partNumber: 1 });
+    console.log(`Found ${parts.length} parts for query:`, query);
     res.json(parts);
   } catch (error) {
+    console.error('Error fetching parts:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Ersatzteile' });
   }
 });

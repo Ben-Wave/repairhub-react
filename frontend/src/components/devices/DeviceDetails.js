@@ -1,4 +1,4 @@
-import React, { useEffect, useContext, useState } from 'react';
+import React, { useEffect, useContext, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DeviceContext } from '../../context/DeviceContext';
 import { PartsContext } from '../../context/PartsContext';
@@ -17,22 +17,19 @@ const DeviceDetails = () => {
   const [purchasePrice, setPurchasePrice] = useState(0);
   const [damageDescription, setDamageDescription] = useState('');
   const [desiredProfit, setDesiredProfit] = useState(0);
+  const [filterType, setFilterType] = useState('compatible'); // 'compatible', 'all'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   
   useEffect(() => {
     getDevice(id);
     // eslint-disable-next-line
   }, [id]);
   
-  
   useEffect(() => {
-    if (device?.model) {
-      const modelCodeMatch = device.model.match(/\[A\d+\]/);
-      if (modelCodeMatch) {
-        getParts(device.model); // Send the full model string to include the model code
-      }
-    }
+    getParts(); // Lade alle Ersatzteile
     // eslint-disable-next-line
-  }, [device?.model]);
+  }, []);
   
   useEffect(() => {
     if (device) {
@@ -42,6 +39,55 @@ const DeviceDetails = () => {
       setSelectedParts(device.parts || []);
     }
   }, [device]);
+  
+  // Extrahiere das Basismodell (z.B. "iPhone 13 mini")
+  const getBaseModel = (modelString) => {
+    if (!modelString) return '';
+    const modelRegex = /^(iPhone \d+(?:\s(?:mini|Pro|Pro Max))?)/i;
+    const modelMatch = modelString.match(modelRegex);
+    return modelMatch ? modelMatch[1] : '';
+  };
+  
+  // Verfügbare Kategorien aus allen Teilen extrahieren
+  const categories = useMemo(() => {
+    if (!parts.length) return [];
+    const categorySet = new Set(parts.map(part => part.category).filter(Boolean));
+    return Array.from(categorySet).sort();
+  }, [parts]);
+  
+  // Filtern der Teile basierend auf verschiedenen Kriterien
+  const filteredParts = useMemo(() => {
+    if (!device || !parts.length) return [];
+    
+    const deviceBaseModel = getBaseModel(device.model);
+    
+    let filtered = [...parts];
+    
+    // Filtern nach Kompatibilität
+    if (filterType === 'compatible' && deviceBaseModel) {
+      filtered = parts.filter(part => {
+        const partBaseModel = getBaseModel(part.forModel);
+        return partBaseModel.toLowerCase() === deviceBaseModel.toLowerCase();
+      });
+    }
+    
+    // Filtern nach Kategorie
+    if (selectedCategory) {
+      filtered = filtered.filter(part => part.category === selectedCategory);
+    }
+    
+    // Filtern nach Suchbegriff
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(part => 
+        part.partNumber.toLowerCase().includes(query) || 
+        part.description.toLowerCase().includes(query) ||
+        (part.forModel && part.forModel.toLowerCase().includes(query))
+      );
+    }
+    
+    return filtered;
+  }, [device, parts, filterType, searchQuery, selectedCategory]);
   
   const handleStatusChange = async (newStatus) => {
     try {
@@ -305,16 +351,70 @@ const DeviceDetails = () => {
             </div>
             
             <div className="mb-4">
+              <div className="bg-gray-100 p-3 rounded mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Filter-Typen */}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Teile anzeigen</label>
+                    <select 
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                    >
+                      <option value="compatible">Nur kompatible Teile</option>
+                      <option value="all">Alle Teile</option>
+                    </select>
+                  </div>
+                  
+                  {/* Kategoriefilter */}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Kategorie</label>
+                    <select 
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                    >
+                      <option value="">Alle Kategorien</option>
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Suchfeld */}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Suche</label>
+                    <input 
+                      type="text"
+                      placeholder="Teilenummer oder Beschreibung..."
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              
               <h5 className="font-medium mb-2">Verfügbare Ersatzteile</h5>
-              {parts.length === 0 ? (
-                <p className="text-gray-500">Keine Ersatzteile für dieses Modell verfügbar</p>
+              {filteredParts.length === 0 ? (
+                <p className="text-gray-500">
+                  Keine Ersatzteile gefunden, die den Filterkriterien entsprechen.
+                </p>
               ) : (
-                <div className="bg-gray-50 p-2 rounded max-h-40 overflow-y-auto">
-                  {parts.map(part => (
+                <div className="bg-gray-50 p-2 rounded max-h-60 overflow-y-auto">
+                  {filteredParts.map(part => (
                     <div key={part._id} className="flex justify-between items-center py-1 border-b last:border-0">
                       <div>
-                        <p className="font-medium">{part.partNumber}</p>
+                        <div className="flex items-center">
+                          <p className="font-medium">{part.partNumber}</p>
+                          {part.category && (
+                            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                              {part.category}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-600">{part.description}</p>
+                        <p className="text-xs text-gray-500">Für: {part.forModel}</p>
                       </div>
                       <div className="flex items-center">
                         <span className="mr-2">{part.price?.toFixed(2)} €</span>
