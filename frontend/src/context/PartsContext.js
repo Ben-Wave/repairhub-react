@@ -3,6 +3,8 @@ import partsReducer from './PartsReducer';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.102:5000/api';
+console.log('API_URL from env:', process.env.REACT_APP_API_URL);
+console.log('Final API_URL for parts:', API_URL);
 
 const initialState = {
   parts: [],
