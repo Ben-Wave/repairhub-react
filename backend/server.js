@@ -82,9 +82,9 @@ const syncConfigSchema = new mongoose.Schema({
 });
 
 // Models
-const Part = mongoose.model('Part', partSchema);
-const Device = mongoose.model('Device', deviceSchema);
-const SyncConfig = mongoose.model('SyncConfig', syncConfigSchema);
+// Models laden
+const { Part, Device, SyncConfig } = require('./models');
+
 
 // Models exportieren, damit sie in anderen Modulen verwendet werden können
 module.exports = {

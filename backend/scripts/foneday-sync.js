@@ -1,8 +1,7 @@
 // backend/scripts/foneday-sync.js
 const axios = require('axios');
-const mongoose = require('mongoose');
 const cron = require('node-cron');
-const { Part, SyncConfig } = require('../server');
+const { Part, SyncConfig } = require('../models'); // Korrekter Import
 
 // Axios-Instanz für Foneday API
 let fonedayApi;

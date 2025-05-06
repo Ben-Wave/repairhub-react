@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const cron = require('node-cron');
-const { SyncConfig } = require('../server'); // Importiere das Model aus server.js
+const { SyncConfig } = require('../models'); // Korrekter Import aus models/index.js
 
 // Synchronisierungsskript importieren
 let synchronizeCatalog, setupCronJob, getConfig;

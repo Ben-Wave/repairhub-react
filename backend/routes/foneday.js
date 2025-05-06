@@ -2,7 +2,9 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const Part = require('../models/Part'); // Pfad anpassen, falls nötig
+
+// Modelle importieren
+const { Part } = require('../models'); // Ändere dies von '../models/part' zu '../models'
 
 // Axios-Instanz für Foneday API
 const fonedayApi = axios.create({
