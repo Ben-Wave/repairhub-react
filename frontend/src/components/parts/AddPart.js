@@ -12,11 +12,12 @@ const AddPart = () => {
     partNumber: '',
     description: '',
     forModel: '',
-    price: ''
+    price: '',
+    category: ''
   });
   const [alert, setAlert] = useState(null);
 
-  const { partNumber, description, forModel, price } = formData;
+  const { partNumber, description, forModel, price, category } = formData;
 
   const onChange = e => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -26,7 +27,7 @@ const AddPart = () => {
     e.preventDefault();
     clearErrors();
 
-    if (!partNumber || !description || !forModel || !price) {
+    if (!partNumber || !description || !forModel || !price || !category) {
       setAlert('Bitte füllen Sie alle Felder aus');
       return;
     }
@@ -36,7 +37,8 @@ const AddPart = () => {
         partNumber,
         description,
         forModel,
-        price: parseFloat(price)
+        price: parseFloat(price),
+        category
       });
       navigate('/parts');
     } catch (err) {
@@ -104,6 +106,25 @@ const AddPart = () => {
           />
           <p className="text-sm text-gray-500 mt-1">
             z.B. "iPhone 13" oder "Samsung Galaxy S21"
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="category" className="block text-gray-700 font-medium mb-2">
+            Kategorie
+          </label>
+          <input
+            type="text"
+            id="category"
+            name="category"
+            value={category}
+            onChange={onChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Kategorie eingeben..."
+            required
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            z.B. "Charging Port", "Screen", "Battery", "Camera"
           </p>
         </div>
 

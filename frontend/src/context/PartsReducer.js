@@ -18,6 +18,20 @@ const partsReducer = (state, action) => {
         parts: [action.payload, ...state.parts],
         loading: false
       };
+    case 'UPDATE_PART':
+      return {
+        ...state,
+        parts: state.parts.map(part => 
+          part._id === action.payload._id ? action.payload : part
+        ),
+        loading: false
+      };
+    case 'DELETE_PART':
+      return {
+        ...state,
+        parts: state.parts.filter(part => part._id !== action.payload),
+        loading: false
+      };
     case 'PARTS_ERROR':
       return {
         ...state,
