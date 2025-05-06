@@ -35,7 +35,7 @@ function App() {
               </Routes>
             </main>
             <footer className="bg-blue-900 text-white p-4 text-center">
-              <p>&copy; {new Date().getFullYear()} Smartphone Manager</p>
+              <p>&copy; {new Date().getFullYear()} Repairhub</p>
             </footer>
           </div>
         </Router>
