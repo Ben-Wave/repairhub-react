@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
@@ -12,11 +14,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Verbindung
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartphone-manager')
-  .then(() => console.log('MongoDB verbunden'))
-  .catch(err => console.error('MongoDB Verbindungsfehler:', err));
-
 // Schemas
 const partSchema = new mongoose.Schema({
   partNumber: { type: String, required: true, unique: true },
@@ -24,7 +21,10 @@ const partSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   forModel: { type: String, required: true },
   category: { type: String, required: true }, // z.B. "Charging Port", "Screen", "Battery", etc.
-  createdAt: { type: Date, default: Date.now }
+  externalSource: { type: String, default: null }, // 'foneday' für importierte Ersatzteile
+  inStock: { type: Boolean, default: true }, // Verfügbarkeitsstatus
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
 const deviceSchema = new mongoose.Schema({
@@ -68,12 +68,39 @@ const deviceSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Synchronisierungseinstellungen Schema
+const syncConfigSchema = new mongoose.Schema({
+  lastSyncTime: { type: Date, default: null },
+  syncEnabled: { type: Boolean, default: true },
+  syncInterval: { type: String, default: '0 0 * * *' }, // Standard: Täglich um Mitternacht
+  autoUpdatePrices: { type: Boolean, default: true },
+  addNewParts: { type: Boolean, default: true },
+  categories: [String], // Zu synchronisierende Kategorien (leer = alle)
+  models: [String], // Zu synchronisierende Modelle (leer = alle)
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 // Models
 const Part = mongoose.model('Part', partSchema);
 const Device = mongoose.model('Device', deviceSchema);
+const SyncConfig = mongoose.model('SyncConfig', syncConfigSchema);
 
-// Routes
+// Models exportieren, damit sie in anderen Modulen verwendet werden können
+module.exports = {
+  Part,
+  Device,
+  SyncConfig
+};
 
+// Routes einbinden
+// Foneday API Route
+const fonedayRoutes = require('./routes/foneday');
+app.use('/api/foneday', fonedayRoutes);
+
+// Sync Routes
+const syncRoutes = require('./routes/sync');
+app.use('/api/sync', syncRoutes);
 
 // IMEI-Abfrage und Gerät erstellen
 app.post('/api/devices/check-imei', async (req, res) => {
@@ -370,6 +397,7 @@ app.put('/api/parts/:id', async (req, res) => {
     part.price = price;
     part.forModel = forModel;
     if (category) part.category = category;
+    part.updatedAt = new Date();
     
     await part.save();
     res.json(part);
@@ -420,7 +448,31 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route nicht gefunden' });
 });
 
-// Server starten
-app.listen(PORT, () => {
-  console.log(`Server läuft auf Port ${PORT}`);
-});
+// Funktion zum Einrichten des Cron-Jobs für die Synchronisierung
+const setupSyncJob = async () => {
+  try {
+    // Synchronisierungsskript importieren
+    const { setupCronJob } = require('./scripts/foneday-sync');
+    
+    // Cron-Job einrichten
+    await setupCronJob();
+    console.log('Foneday Synchronisations-Job eingerichtet');
+  } catch (error) {
+    console.error('Fehler beim Einrichten des Synchronisations-Jobs:', error);
+  }
+};
+
+// MongoDB verbinden und Server starten
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartphone-manager')
+  .then(() => {
+    console.log('MongoDB verbunden');
+    
+    // Synchronisations-Job einrichten
+    setupSyncJob();
+    
+    // Server starten
+    app.listen(PORT, () => {
+      console.log(`Server läuft auf Port ${PORT}`);
+    });
+  })
+  .catch(err => console.error('MongoDB Verbindungsfehler:', err));
