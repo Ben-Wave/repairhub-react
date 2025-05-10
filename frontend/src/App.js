@@ -11,6 +11,8 @@ import EditDevice from './components/devices/EditDevice';
 import PartsList from './components/parts/PartsList';
 import AddPart from './components/parts/AddPart';
 import PriceCalculator from './components/tools/PriceCalculator';
+import FonedaySearch from './components/parts/FonedaySearch';
+import SyncSettings from './components/parts/SyncSettings';
 import NotFound from './components/pages/NotFound';
 import './App.css';
 
@@ -30,6 +32,8 @@ function App() {
                 <Route path="/devices/edit/:id" element={<EditDevice />} />
                 <Route path="/parts" element={<PartsList />} />
                 <Route path="/parts/add" element={<AddPart />} />
+                <Route path="/foneday-search" element={<FonedaySearch />} />
+                <Route path="/sync-settings" element={<SyncSettings />} />
                 <Route path="/calculator" element={<PriceCalculator />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

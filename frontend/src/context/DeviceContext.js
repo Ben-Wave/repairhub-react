@@ -2,7 +2,7 @@ import React, { createContext, useReducer } from 'react';
 import deviceReducer from './DeviceReducer';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.102:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.88:5000/api';
 console.log('API_URL from env:', process.env.REACT_APP_API_URL);
 console.log('Final API_URL:', API_URL);
 
