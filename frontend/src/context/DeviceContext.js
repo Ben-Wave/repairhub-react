@@ -1,22 +1,20 @@
 import React, { createContext, useReducer } from 'react';
-import deviceReducer from './DeviceReducer';
 import axios from 'axios';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.178.102:5000/api';
-console.log('API_URL from env:', process.env.REACT_APP_API_URL);
-console.log('Final API_URL:', API_URL);
+import deviceReducer from './DeviceReducer';
 
 const initialState = {
   devices: [],
   device: null,
-  loading: false,
-  error: null,
   stats: {
     totalDevices: 0,
     availableDevices: 0,
     soldDevices: 0,
-    totalProfit: 0
-  }
+    totalProfit: 0,
+    actualProfit: 0,
+    plannedProfit: 0
+  },
+  loading: true,
+  error: null
 };
 
 export const DeviceContext = createContext(initialState);
@@ -24,11 +22,13 @@ export const DeviceContext = createContext(initialState);
 export const DeviceProvider = ({ children }) => {
   const [state, dispatch] = useReducer(deviceReducer, initialState);
 
-  // Aktionen
+  // Alle Geräte abrufen
   const getDevices = async () => {
-    setLoading();
     try {
-      const res = await axios.get(`${API_URL}/devices`);
+      dispatch({ type: 'SET_LOADING' });
+
+      const res = await axios.get('/api/devices');
+
       dispatch({
         type: 'GET_DEVICES',
         payload: res.data
@@ -36,80 +36,16 @@ export const DeviceProvider = ({ children }) => {
     } catch (err) {
       dispatch({
         type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler beim Abrufen der Geräte'
+        payload: err.response?.data?.msg || 'Fehler beim Abrufen der Geräte'
       });
     }
   };
 
-  const getDevice = async (id) => {
-    setLoading();
-    try {
-      const res = await axios.get(`${API_URL}/devices/${id}`);
-      dispatch({
-        type: 'GET_DEVICE',
-        payload: res.data
-      });
-    } catch (err) {
-      dispatch({
-        type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler beim Abrufen des Geräts'
-      });
-    }
-  };
-
-  const checkImei = async (imei) => {
-    setLoading();
-    try {
-      const res = await axios.post(`${API_URL}/devices/check-imei`, { imei });
-      dispatch({
-        type: 'CHECK_IMEI_SUCCESS',
-        payload: res.data
-      });
-      return res.data;
-    } catch (err) {
-      dispatch({
-        type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler bei der IMEI-Überprüfung'
-      });
-      throw err;
-    }
-  };
-
-  const updateDevice = async (id, deviceData) => {
-    try {
-      const res = await axios.put(`${API_URL}/devices/${id}`, deviceData);
-      dispatch({
-        type: 'UPDATE_DEVICE',
-        payload: res.data
-      });
-      return res.data;
-    } catch (err) {
-      dispatch({
-        type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler beim Aktualisieren des Geräts'
-      });
-      throw err;
-    }
-  };
-
-  const deleteDevice = async (id) => {
-    try {
-      await axios.delete(`${API_URL}/devices/${id}`);
-      dispatch({
-        type: 'DELETE_DEVICE',
-        payload: id
-      });
-    } catch (err) {
-      dispatch({
-        type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler beim Löschen des Geräts'
-      });
-    }
-  };
-
+  // Statistiken abrufen
   const getStats = async () => {
     try {
-      const res = await axios.get(`${API_URL}/stats`);
+      const res = await axios.get('/api/stats');
+      
       dispatch({
         type: 'GET_STATS',
         payload: res.data
@@ -117,17 +53,98 @@ export const DeviceProvider = ({ children }) => {
     } catch (err) {
       dispatch({
         type: 'DEVICE_ERROR',
-        payload: err.response?.data?.error || 'Fehler beim Abrufen der Statistiken'
+        payload: err.response?.data?.msg || 'Fehler beim Abrufen der Statistiken'
       });
     }
   };
 
-  const clearErrors = () => {
-    dispatch({ type: 'CLEAR_ERRORS' });
+  // Einzelnes Gerät abrufen
+  const getDevice = async (id) => {
+    try {
+      dispatch({ type: 'SET_LOADING' });
+
+      const res = await axios.get(`/api/devices/${id}`);
+
+      dispatch({
+        type: 'GET_DEVICE',
+        payload: res.data
+      });
+    } catch (err) {
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: err.response?.data?.msg || 'Fehler beim Abrufen des Geräts'
+      });
+    }
   };
 
-  const setLoading = () => {
-    dispatch({ type: 'SET_LOADING' });
+  // Neues Gerät hinzufügen
+  const addDevice = async (device) => {
+    const config = {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+
+    try {
+      const res = await axios.post('/api/devices', device, config);
+
+      dispatch({
+        type: 'ADD_DEVICE',
+        payload: res.data
+      });
+
+      return res.data;
+    } catch (err) {
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: err.response?.data?.msg || 'Fehler beim Hinzufügen des Geräts'
+      });
+      throw err;
+    }
+  };
+
+  // Gerät aktualisieren
+  const updateDevice = async (id, deviceData) => {
+    const config = {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+
+    try {
+      const res = await axios.put(`/api/devices/${id}`, deviceData, config);
+
+      dispatch({
+        type: 'UPDATE_DEVICE',
+        payload: res.data
+      });
+
+      return res.data;
+    } catch (err) {
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: err.response?.data?.msg || 'Fehler beim Aktualisieren des Geräts'
+      });
+      throw err;
+    }
+  };
+
+  // Gerät löschen
+  const deleteDevice = async (id) => {
+    try {
+      await axios.delete(`/api/devices/${id}`);
+
+      dispatch({
+        type: 'DELETE_DEVICE',
+        payload: id
+      });
+    } catch (err) {
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: err.response?.data?.msg || 'Fehler beim Löschen des Geräts'
+      });
+      throw err;
+    }
   };
 
   return (
@@ -140,11 +157,10 @@ export const DeviceProvider = ({ children }) => {
         stats: state.stats,
         getDevices,
         getDevice,
-        checkImei,
+        addDevice,
         updateDevice,
         deleteDevice,
-        getStats,
-        clearErrors
+        getStats
       }}
     >
       {children}

@@ -1,23 +1,38 @@
 const deviceReducer = (state, action) => {
   switch (action.type) {
+    case 'SET_LOADING':
+      return {
+        ...state,
+        loading: true
+      };
+    
     case 'GET_DEVICES':
       return {
         ...state,
         devices: action.payload,
         loading: false
       };
+    
     case 'GET_DEVICE':
       return {
         ...state,
         device: action.payload,
         loading: false
       };
-    case 'CHECK_IMEI_SUCCESS':
+    
+    case 'GET_STATS':
       return {
         ...state,
-        devices: [action.payload, ...state.devices],
+        stats: action.payload
+      };
+    
+    case 'ADD_DEVICE':
+      return {
+        ...state,
+        devices: [...state.devices, action.payload],
         loading: false
       };
+    
     case 'UPDATE_DEVICE':
       return {
         ...state,
@@ -27,34 +42,21 @@ const deviceReducer = (state, action) => {
         device: action.payload,
         loading: false
       };
+    
     case 'DELETE_DEVICE':
       return {
         ...state,
         devices: state.devices.filter(device => device._id !== action.payload),
         loading: false
       };
-    case 'GET_STATS':
-      return {
-        ...state,
-        stats: action.payload,
-        loading: false
-      };
+    
     case 'DEVICE_ERROR':
       return {
         ...state,
         error: action.payload,
         loading: false
       };
-    case 'CLEAR_ERRORS':
-      return {
-        ...state,
-        error: null
-      };
-    case 'SET_LOADING':
-      return {
-        ...state,
-        loading: true
-      };
+    
     default:
       return state;
   }

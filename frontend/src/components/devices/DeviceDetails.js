@@ -4,12 +4,13 @@ import { DeviceContext } from '../../context/DeviceContext';
 import { PartsContext } from '../../context/PartsContext';
 import Spinner from '../layout/Spinner';
 import Alert from '../layout/Alert';
+import SalesModal from './SalesModal';
 
 const DeviceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const { device, loading, error, getDevice, updateDevice, deleteDevice } = useContext(DeviceContext);
+  const { device, loading, error, getDevice, updateDevice, deleteDevice, getStats } = useContext(DeviceContext);
   const { parts, getParts } = useContext(PartsContext);
   
   const [alert, setAlert] = useState(null);
@@ -20,14 +21,44 @@ const DeviceDetails = () => {
   const [filterType, setFilterType] = useState('compatible'); // 'compatible', 'all'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  
+  // Hilfs-/Berechungsfunktionen zuerst definieren
+  const calculateTotalPartsPrice = () => {
+    return selectedParts.reduce((total, part) => total + (part.price || 0), 0);
+  };
+  
+  const calculateSellingPrice = () => {
+    return (parseFloat(purchasePrice) || 0) + 
+           calculateTotalPartsPrice() + 
+           (parseFloat(desiredProfit) || 0);
+  };
+  
+  const calculateActualProfit = () => {
+    if (!device || !device.actualSellingPrice) return 0;
+    const costs = (parseFloat(purchasePrice) || 0) + calculateTotalPartsPrice();
+    return device.actualSellingPrice - costs;
+  };
+  
+  // Extrahiere das Basismodell (z.B. "iPhone 13 mini")
+  const getBaseModel = (modelString) => {
+    if (!modelString) return '';
+    const modelRegex = /^(iPhone \d+(?:\s(?:mini|Pro|Pro Max))?)/i;
+    const modelMatch = modelString.match(modelRegex);
+    return modelMatch ? modelMatch[1] : '';
+  };
   
   useEffect(() => {
-    getDevice(id);
+    if (typeof getDevice === 'function') {
+      getDevice(id);
+    }
     // eslint-disable-next-line
   }, [id]);
   
   useEffect(() => {
-    getParts(); // Lade alle Ersatzteile
+    if (typeof getParts === 'function') {
+      getParts(); // Lade alle Ersatzteile
+    }
     // eslint-disable-next-line
   }, []);
   
@@ -40,24 +71,16 @@ const DeviceDetails = () => {
     }
   }, [device]);
   
-  // Extrahiere das Basismodell (z.B. "iPhone 13 mini")
-  const getBaseModel = (modelString) => {
-    if (!modelString) return '';
-    const modelRegex = /^(iPhone \d+(?:\s(?:mini|Pro|Pro Max))?)/i;
-    const modelMatch = modelString.match(modelRegex);
-    return modelMatch ? modelMatch[1] : '';
-  };
-  
   // Verfügbare Kategorien aus allen Teilen extrahieren
   const categories = useMemo(() => {
-    if (!parts.length) return [];
+    if (!parts || !parts.length) return [];
     const categorySet = new Set(parts.map(part => part.category).filter(Boolean));
     return Array.from(categorySet).sort();
   }, [parts]);
   
   // Filtern der Teile basierend auf verschiedenen Kriterien
   const filteredParts = useMemo(() => {
-    if (!device || !parts.length) return [];
+    if (!device || !parts || !parts.length) return [];
     
     const deviceBaseModel = getBaseModel(device.model);
     
@@ -91,20 +114,52 @@ const DeviceDetails = () => {
   
   const handleStatusChange = async (newStatus) => {
     try {
-      await updateDevice(id, { status: newStatus });
-      setAlert({ type: 'success', message: 'Status erfolgreich aktualisiert' });
+      if (newStatus === 'verkauft') {
+        setIsSalesModalOpen(true);
+      } else {
+        await updateDevice(id, { status: newStatus });
+        if (typeof getStats === 'function') {
+          getStats(); // Aktualisiere die Statistiken
+        }
+        setAlert({ type: 'success', message: 'Status erfolgreich aktualisiert' });
+      }
     } catch (err) {
       setAlert({ type: 'error', message: 'Fehler beim Aktualisieren des Status' });
     }
   };
   
+  const handleSaveActualSellingPrice = async (actualSellingPrice) => {
+    try {
+      const now = new Date();
+      await updateDevice(id, { 
+        status: 'verkauft',
+        actualSellingPrice,
+        soldDate: now
+      });
+      
+      // Statistiken aktualisieren
+      if (typeof getStats === 'function') {
+        getStats();
+      }
+      
+      setAlert({ type: 'success', message: 'Gerät als verkauft markiert und Verkaufspreis gespeichert' });
+    } catch (err) {
+      setAlert({ type: 'error', message: 'Fehler beim Speichern des Verkaufspreises' });
+    }
+  };
+  
   const handleSaveChanges = async () => {
     try {
+      // Kalkulierten Verkaufspreis berechnen
+      const sellingPrice = calculateSellingPrice();
+      
       await updateDevice(id, {
         purchasePrice,
         damageDescription,
         desiredProfit,
-        parts: selectedParts
+        sellingPrice,
+        parts: selectedParts,
+        updatedAt: new Date()
       });
       setAlert({ type: 'success', message: 'Gerät erfolgreich aktualisiert' });
     } catch (err) {
@@ -137,16 +192,6 @@ const DeviceDetails = () => {
     setSelectedParts(selectedParts.filter(p => p.partNumber !== partNumber));
   };
   
-  const calculateTotalPartsPrice = () => {
-    return selectedParts.reduce((total, part) => total + (part.price || 0), 0);
-  };
-  
-  const calculateSellingPrice = () => {
-    return (parseFloat(purchasePrice) || 0) + 
-           calculateTotalPartsPrice() + 
-           (parseFloat(desiredProfit) || 0);
-  };
-  
   if (loading || !device) {
     return <Spinner />;
   }
@@ -160,6 +205,13 @@ const DeviceDetails = () => {
           onClose={() => setAlert(null)} 
         />
       )}
+      
+      <SalesModal 
+        isOpen={isSalesModalOpen} 
+        onClose={() => setIsSalesModalOpen(false)} 
+        onSave={handleSaveActualSellingPrice}
+        desiredSellingPrice={device.sellingPrice || calculateSellingPrice()}
+      />
       
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-blue-900">
@@ -442,11 +494,58 @@ const DeviceDetails = () => {
               <p className="text-gray-600">Ersatzteile:</p>
               <p className="font-medium text-right">{calculateTotalPartsPrice().toFixed(2)} €</p>
               
-              <p className="text-gray-600">Gewinn:</p>
+              <p className="text-gray-600">Gewünschter Gewinn:</p>
               <p className="font-medium text-right">{parseFloat(desiredProfit).toFixed(2)} €</p>
               
-              <p className="text-gray-700 font-bold">Verkaufspreis:</p>
+              <p className="text-gray-700 font-bold">Kalkulierter Verkaufspreis:</p>
               <p className="font-bold text-right text-blue-700">{calculateSellingPrice().toFixed(2)} €</p>
+              
+              {device.status === 'verkauft' && device.actualSellingPrice && (
+                <>
+                  <p className="text-gray-700 font-bold">Tatsächlicher Verkaufspreis:</p>
+                  <p className="font-bold text-right text-purple-700">{parseFloat(device.actualSellingPrice).toFixed(2)} €</p>
+                  
+                  <p className="text-gray-700 font-bold">Gewinnvergleich:</p>
+                  <p className="text-right">-</p>
+                  
+                  {/* Visuelle Gegenüberstellung des Gewinns */}
+                  <div className="col-span-2 bg-gray-100 p-3 rounded mt-2">
+                    <div className="flex justify-between items-center mb-2">
+                      <div>
+                        <span className="text-sm text-gray-500">Gewünscht</span>
+                        <p className="font-bold text-gray-700">{parseFloat(desiredProfit).toFixed(2)} €</p>
+                      </div>
+                      
+                      <div className="text-center">
+                        {(() => {
+                          const diff = calculateActualProfit() - parseFloat(desiredProfit);
+                          const isPositive = diff >= 0;
+                          return (
+                            <>
+                              <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                {isPositive ? '+' : ''}{diff.toFixed(2)} €
+                              </span>
+                              <div className="flex justify-center mt-1">
+                                <span className={`inline-block w-5 h-5 rounded-full ${isPositive ? 'bg-green-100' : 'bg-red-100'} 
+                                  flex items-center justify-center`}>
+                                  <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                    {isPositive ? '▲' : '▼'}
+                                  </span>
+                                </span>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      
+                      <div className="text-right">
+                        <span className="text-sm text-gray-500">Tatsächlich</span>
+                        <p className="font-bold text-green-600">{calculateActualProfit().toFixed(2)} €</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           

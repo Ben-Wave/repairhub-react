@@ -1,4 +1,3 @@
-
 import React, { useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { DeviceContext } from '../../context/DeviceContext';
@@ -8,12 +7,27 @@ const Dashboard = () => {
   const { devices, loading, getDevices, stats, getStats } = useContext(DeviceContext);
 
   useEffect(() => {
-    getDevices();
-    getStats();
+    // Sicherstellen, dass die Funktionen existieren, bevor sie aufgerufen werden
+    if (typeof getDevices === 'function') {
+      getDevices();
+    } else {
+      console.error('getDevices ist keine Funktion:', getDevices);
+    }
+    
+    if (typeof getStats === 'function') {
+      getStats();
+    } else {
+      console.error('getStats ist keine Funktion:', getStats);
+    }
     // eslint-disable-next-line
   }, []);
 
   const getRecentDevices = () => {
+    // Sicherstellen, dass devices ein Array ist
+    if (!Array.isArray(devices)) {
+      console.error('devices ist kein Array:', devices);
+      return [];
+    }
     return devices.slice(0, 5);
   };
 
@@ -47,6 +61,14 @@ const Dashboard = () => {
     }
   };
 
+  // Stellen Sie sicher, dass stats ein Objekt ist
+  const safeStats = stats || {
+    totalDevices: 0,
+    availableDevices: 0,
+    soldDevices: 0,
+    totalProfit: 0
+  };
+
   if (loading) {
     return <Spinner />;
   }
@@ -65,7 +87,7 @@ const Dashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-gray-500 text-sm">Gesamte Geräte</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.totalDevices}</p>
+              <p className="text-2xl font-bold text-gray-800">{safeStats.totalDevices}</p>
             </div>
           </div>
         </div>
@@ -79,7 +101,7 @@ const Dashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-gray-500 text-sm">Verfügbare Geräte</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.availableDevices}</p>
+              <p className="text-2xl font-bold text-gray-800">{safeStats.availableDevices}</p>
             </div>
           </div>
         </div>
@@ -93,7 +115,7 @@ const Dashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-gray-500 text-sm">Verkaufte Geräte</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.soldDevices}</p>
+              <p className="text-2xl font-bold text-gray-800">{safeStats.soldDevices}</p>
             </div>
           </div>
         </div>
@@ -107,7 +129,9 @@ const Dashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-gray-500 text-sm">Gesamtgewinn</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.totalProfit.toFixed(2)} €</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {safeStats.totalProfit ? safeStats.totalProfit.toFixed(2) : "0.00"} €
+              </p>
             </div>
           </div>
         </div>
@@ -166,13 +190,16 @@ const Dashboard = () => {
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">Gekauft</span>
                 <span className="text-blue-600 font-bold">
-                  {devices.filter(d => d.status === 'gekauft').length}
+                  {Array.isArray(devices) ? devices.filter(d => d.status === 'gekauft').length : 0}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className="bg-blue-600 h-2.5 rounded-full" 
-                  style={{ width: `${(devices.filter(d => d.status === 'gekauft').length / Math.max(devices.length, 1)) * 100}%` }}
+                  style={{ 
+                    width: `${Array.isArray(devices) ? 
+                      (devices.filter(d => d.status === 'gekauft').length / Math.max(devices.length, 1)) * 100 : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -181,13 +208,16 @@ const Dashboard = () => {
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">In Reparatur</span>
                 <span className="text-yellow-600 font-bold">
-                  {devices.filter(d => d.status === 'in_reparatur').length}
+                  {Array.isArray(devices) ? devices.filter(d => d.status === 'in_reparatur').length : 0}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className="bg-yellow-500 h-2.5 rounded-full" 
-                  style={{ width: `${(devices.filter(d => d.status === 'in_reparatur').length / Math.max(devices.length, 1)) * 100}%` }}
+                  style={{ 
+                    width: `${Array.isArray(devices) ? 
+                      (devices.filter(d => d.status === 'in_reparatur').length / Math.max(devices.length, 1)) * 100 : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -196,13 +226,16 @@ const Dashboard = () => {
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">Zum Verkauf</span>
                 <span className="text-green-600 font-bold">
-                  {devices.filter(d => d.status === 'zum_verkauf').length}
+                  {Array.isArray(devices) ? devices.filter(d => d.status === 'zum_verkauf').length : 0}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className="bg-green-500 h-2.5 rounded-full" 
-                  style={{ width: `${(devices.filter(d => d.status === 'zum_verkauf').length / Math.max(devices.length, 1)) * 100}%` }}
+                  style={{ 
+                    width: `${Array.isArray(devices) ? 
+                      (devices.filter(d => d.status === 'zum_verkauf').length / Math.max(devices.length, 1)) * 100 : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -211,13 +244,16 @@ const Dashboard = () => {
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">Verkauft</span>
                 <span className="text-purple-600 font-bold">
-                  {devices.filter(d => d.status === 'verkauft').length}
+                  {Array.isArray(devices) ? devices.filter(d => d.status === 'verkauft').length : 0}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className="bg-purple-500 h-2.5 rounded-full" 
-                  style={{ width: `${(devices.filter(d => d.status === 'verkauft').length / Math.max(devices.length, 1)) * 100}%` }}
+                  style={{ 
+                    width: `${Array.isArray(devices) ? 
+                      (devices.filter(d => d.status === 'verkauft').length / Math.max(devices.length, 1)) * 100 : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>

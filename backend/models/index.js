@@ -31,6 +31,8 @@ const deviceSchema = new mongoose.Schema({
   }],
   desiredProfit: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
+  // Neues Feld für den tatsächlichen Verkaufspreis
+  actualSellingPrice: { type: Number },
   status: { type: String, default: 'gekauft', enum: ['gekauft', 'in_reparatur', 'zum_verkauf', 'verkauft'] },
   purchaseDate: { type: Date, default: Date.now },
   soldDate: Date,
@@ -40,7 +42,6 @@ const deviceSchema = new mongoose.Schema({
 });
 
 // Part 
-// 
 const partSchema = new mongoose.Schema({
   partNumber: { type: String, required: true, unique: true },
   description: { type: String, required: true },

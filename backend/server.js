@@ -58,6 +58,8 @@ const deviceSchema = new mongoose.Schema({
   }],
   desiredProfit: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
+  // Neues Feld für den tatsächlichen Verkaufspreis
+  actualSellingPrice: { type: Number },
   status: { type: String, default: 'gekauft', 
     enum: ['gekauft', 'in_reparatur', 'zum_verkauf', 'verkauft'] },
   purchaseDate: { type: Date, default: Date.now },
@@ -199,7 +201,7 @@ app.get('/api/devices/:id', async (req, res) => {
 // Gerät aktualisieren
 app.put('/api/devices/:id', async (req, res) => {
   try {
-    const { purchasePrice, damageDescription, parts, desiredProfit, status } = req.body;
+    const { purchasePrice, damageDescription, parts, desiredProfit, status, actualSellingPrice } = req.body;
     
     const device = await Device.findById(req.params.id);
     if (!device) {
@@ -211,6 +213,12 @@ app.put('/api/devices/:id', async (req, res) => {
     if (damageDescription !== undefined) device.damageDescription = damageDescription;
     if (parts !== undefined) device.parts = parts;
     if (desiredProfit !== undefined) device.desiredProfit = desiredProfit;
+    
+    // Wenn der tatsächliche Verkaufspreis angegeben wird, diesen speichern
+    if (actualSellingPrice !== undefined) {
+      device.actualSellingPrice = actualSellingPrice;
+    }
+    
     if (status !== undefined) {
       device.status = status;
       if (status === 'verkauft' && !device.soldDate) {
@@ -363,20 +371,38 @@ app.get('/api/stats', async (req, res) => {
     const availableDevices = await Device.countDocuments({ status: { $ne: 'verkauft' } });
     const soldDevices = await Device.countDocuments({ status: 'verkauft' });
     
+    // Aktualisiert, um den tatsächlichen Verkaufspreis zu berücksichtigen
     const totalProfit = await Device.aggregate([
       { $match: { status: 'verkauft' } },
-      { $group: { _id: null, profit: { $sum: '$desiredProfit' } } }
+      { 
+        $group: { 
+          _id: null, 
+          plannedProfit: { $sum: '$desiredProfit' },
+          // Wenn actualSellingPrice vorhanden, berechnen wir den tatsächlichen Gewinn
+          actualProfit: { 
+            $sum: { 
+              $cond: [
+                { $ne: ['$actualSellingPrice', null] },
+                { $subtract: ['$actualSellingPrice', { $add: ['$purchasePrice', { $sum: '$parts.price' }] }] },
+                '$desiredProfit'
+              ]
+            }
+          }
+        } 
+      }
     ]);
     
     const stats = {
       totalDevices,
       availableDevices,
       soldDevices,
-      totalProfit: totalProfit.length > 0 ? totalProfit[0].profit : 0
+      plannedProfit: totalProfit.length > 0 ? totalProfit[0].plannedProfit : 0,
+      actualProfit: totalProfit.length > 0 ? totalProfit[0].actualProfit : 0
     };
     
     res.json(stats);
   } catch (error) {
+    console.error('Fehler beim Abrufen der Statistiken:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Statistiken' });
   }
 });
