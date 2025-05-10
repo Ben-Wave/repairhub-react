@@ -6,11 +6,13 @@ services:
     container_name: smartphone-manager-backend
     ports:
       - "5000:5000"
-    environment:
-      - MONGODB_URI=mongodb://host.docker.internal:27017/smartphone-manager
-      - IMEI_API_KEY=${IMEI_API_KEY}
+    env_file:
+      - ./backend/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - app-network
 
@@ -19,8 +21,13 @@ services:
     container_name: smartphone-manager-frontend
     ports:
       - "90:90"
+    env_file:
+      - ./frontend/.env
     depends_on:
       - backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - app-network
 

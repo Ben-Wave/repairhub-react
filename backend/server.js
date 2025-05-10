@@ -106,78 +106,33 @@ app.use('/api/sync', syncRoutes);
 app.post('/api/devices/check-imei', async (req, res) => {
   try {
     const { imei } = req.body;
-    
+
     if (!imei) {
       return res.status(400).json({ error: 'IMEI ist erforderlich' });
     }
-    
-    // IMEI-Format validieren (15-17 Ziffern)
+
     const imeiRegex = /^\d{15,17}$/;
     if (!imeiRegex.test(imei)) {
       return res.status(400).json({ error: 'Ungültiges IMEI-Format. IMEI sollte 15-17 Ziffern enthalten.' });
     }
-    
-    // Prüfen, ob das Gerät bereits existiert
-    const existingDevice = await Device.findOne({ imei });
-    if (existingDevice) {
-      return res.status(400).json({ error: 'Gerät mit dieser IMEI existiert bereits' });
-    }
-    
-    // API-Schlüssel aus Umgebungsvariablen
+
     const apiKey = process.env.IMEI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'API-Schlüssel nicht konfiguriert' });
     }
-    
-    // Service ID für die IMEI-Abfrage (3 für den gewünschten Dienst)
-    const serviceId = 3;
-    
-    // IMEI API Abfrage mit Fehlerbehandlung und Timeout
+
     try {
-      // Neue API-URL gemäß der angegebenen Struktur
       const apiResponse = await axios.get(
-        `https://alpha.imeicheck.com/api/php-api/create?key=${apiKey}&service=${serviceId}&imei=${imei}`,
-        { 
-          timeout: 15000, // 15 Sekunden Timeout
-          validateStatus: status => status < 500 // Alle Status < 500 akzeptieren, um Fehler selbst zu behandeln
-        }
+        `https://alpha.imeicheck.com/api/php-api/create?key=${apiKey}&service=3&imei=${imei}`,
+        { timeout: 15000, validateStatus: status => status < 500 }
       );
-      
-      console.log('IMEI-API-Antwort:', JSON.stringify(apiResponse.data, null, 2));
-      
-      // Prüfen, ob die Anfrage erfolgreich war
-      if (apiResponse.status !== 200) {
+
+      if (apiResponse.status !== 200 || apiResponse.data.status !== "success" || !apiResponse.data.object) {
         console.error('IMEI-API-Fehler:', apiResponse.status, apiResponse.data);
-        
-        // Fallback-Methode: Basisdaten nur mit IMEI erstellen
-        const newDevice = new Device({
-          imei,
-          status: 'gekauft',
-          purchaseDate: new Date()
-        });
-        
-        await newDevice.save();
-        return res.status(201).json({ 
-          ...newDevice.toObject(), 
-          warning: 'IMEI-API nicht verfügbar. Gerät mit Basisdaten erstellt. Bitte manuell aktualisieren.'
-        });
+        return res.status(400).json({ error: 'IMEI konnte nicht überprüft werden', details: apiResponse.data });
       }
-      
-      // Erfolgs-Antwort überprüfen anhand der tatsächlichen API-Antwortstruktur
-      const apiData = apiResponse.data;
-      
-      // Fehlerprüfung gemäß dem Format der API-Antwort
-      if (apiData.status !== "success" || !apiData.object) {
-        return res.status(400).json({ 
-          error: 'IMEI konnte nicht überprüft werden', 
-          details: apiData
-        });
-      }
-      
-      // Extrahiere Gerätedaten aus der API-Antwort - exakt gemäß dem zurückgelieferten Format
-      const modelData = apiData.object;
-      
-      // Gerät erstellen mit den korrekten Feldern aus der API-Antwort
+
+      const modelData = apiResponse.data.object;
       const deviceData = {
         imei,
         imei2: modelData.imei2 || '',
@@ -199,39 +154,22 @@ app.post('/api/devices/check-imei', async (req, res) => {
         usaBlockStatus: modelData.usaBlockStatus || '',
         simLock: !!modelData.simLock,
         region: modelData['apple/region'] || '',
-        // Die vollständige API-Antwort speichern
-        apiResponse: apiData
+        status: 'gekauft',
+        purchaseDate: new Date(),
+        apiResponse: apiResponse.data
       };
-      
+
       const newDevice = new Device(deviceData);
       await newDevice.save();
-      
       res.status(201).json(newDevice);
+
     } catch (apiError) {
       console.error('IMEI-API-Zugriffsfehler:', apiError.message);
-      
-      // Wenn die API nicht erreichbar ist, ein Basis-Gerät erstellen
-      const newDevice = new Device({
-        imei,
-        model: 'Manuell hinzuzufügen',
-        status: 'gekauft',
-        purchaseDate: new Date()
-      });
-      
-      await newDevice.save();
-      
-      // Gerät erstellt, aber mit Warnung zurückgeben
-      res.status(201).json({ 
-        ...newDevice.toObject(), 
-        warning: 'IMEI-API nicht erreichbar. Gerät mit Basisdaten erstellt. Bitte manuell aktualisieren.'
-      });
+      return res.status(500).json({ error: 'IMEI-API nicht erreichbar. Bitte später erneut versuchen.' });
     }
   } catch (error) {
     console.error('IMEI-Abfrage Fehler:', error);
-    res.status(500).json({ 
-      error: 'Serverfehler bei der IMEI-Abfrage',
-      message: error.message
-    });
+    res.status(500).json({ error: 'Serverfehler bei der IMEI-Abfrage', message: error.message });
   }
 });
 
