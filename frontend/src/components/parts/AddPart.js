@@ -16,6 +16,7 @@ const AddPart = () => {
     category: ''
   });
   const [alert, setAlert] = useState(null);
+  const [stock, setStock] = useState(0);
 
   const { partNumber, description, forModel, price, category } = formData;
 
@@ -38,7 +39,8 @@ const AddPart = () => {
         description,
         forModel,
         price: parseFloat(price),
-        category
+        category,
+        stock: parseInt(stock, 10) || 0
       });
       navigate('/parts');
     } catch (err) {
@@ -143,6 +145,22 @@ const AddPart = () => {
             min="0"
             step="0.01"
             required
+          />
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="stock" className="block text-gray-700 font-medium mb-2">
+            Lagerbestand
+          </label>
+          <input
+            type="number"
+            id="stock"
+            name="stock"
+            value={stock}
+            onChange={e => setStock(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            min="0"
+            step="1"
           />
         </div>
 

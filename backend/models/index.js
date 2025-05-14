@@ -33,7 +33,11 @@ const deviceSchema = new mongoose.Schema({
   sellingPrice: { type: Number, default: 0 },
   // Neues Feld für den tatsächlichen Verkaufspreis
   actualSellingPrice: { type: Number },
-  status: { type: String, default: 'gekauft', enum: ['gekauft', 'in_reparatur', 'zum_verkauf', 'verkauft'] },
+  status: { 
+    type: String, 
+    default: 'gekauft', 
+    enum: ['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'] // NEU: 'verkaufsbereit'
+  },
   purchaseDate: { type: Date, default: Date.now },
   soldDate: Date,
   apiResponse: Object,
@@ -50,6 +54,7 @@ const partSchema = new mongoose.Schema({
   category: { type: String, required: true },
   externalSource: { type: String, default: null },
   inStock: { type: Boolean, default: true },
+  stock: { type: Number, default: 0 }, // <--- NEU: Lagerbestand
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

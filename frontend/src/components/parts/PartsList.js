@@ -9,7 +9,7 @@ const PartsList = () => {
   const { parts, loading, getParts, updatePart, deletePart, error, clearErrors } = useContext(PartsContext);
   const [filteredParts, setFilteredParts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterModel, setFilterModel] = useState('');
+  const [filterModel, setFilterModel] = useState('iPhone'); // Standardwert auf iPhone
   const [editingPart, setEditingPart] = useState(null);
   const [alert, setAlert] = useState(null);
 
@@ -151,6 +151,7 @@ const PartsList = () => {
                   <th className="py-3 px-4 text-left">Beschreibung</th>
                   <th className="py-3 px-4 text-left">Kategorie</th>
                   <th className="py-3 px-4 text-left">Für Modell</th>
+                  <th className="py-3 px-4 text-right">Lager</th> {/* NEU */}
                   <th className="py-3 px-4 text-right">Preis</th>
                   <th className="py-3 px-4 text-center">Aktionen</th>
                 </tr>
@@ -166,6 +167,7 @@ const PartsList = () => {
                     <td className="py-3 px-4">{part.description}</td>
                     <td className="py-3 px-4">{part.category || '-'}</td>
                     <td className="py-3 px-4">{part.forModel}</td>
+                    <td className="py-3 px-4 text-right">{part.stock ?? 0}</td> {/* NEU */}
                     <td className="py-3 px-4 text-right">{part.price.toFixed(2)} €</td>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                       <button

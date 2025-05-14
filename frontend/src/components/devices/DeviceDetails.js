@@ -192,6 +192,39 @@ const DeviceDetails = () => {
     setSelectedParts(selectedParts.filter(p => p.partNumber !== partNumber));
   };
   
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'gekauft':
+        return 'Gekauft';
+      case 'in_reparatur':
+        return 'In Reparatur';
+      case 'verkaufsbereit':
+        return 'Verkaufsbereit';
+      case 'zum_verkauf':
+        return 'Zum Verkauf';
+      case 'verkauft':
+        return 'Verkauft';
+      default:
+        return 'Unbekannt';
+    }
+  };
+
+  // Einheitliche Farbe für Status-Buttons und Status-Badges
+  const statusColorMap = {
+    gekauft: 'bg-gray-600 text-white',
+    in_reparatur: 'bg-yellow-600 text-white',
+    verkaufsbereit: 'bg-blue-600 text-white', // Blau für "Verkaufsbereit"
+    zum_verkauf: 'bg-green-600 text-white',
+    verkauft: 'bg-purple-600 text-white'
+  };
+  const statusInactiveColorMap = {
+    gekauft: 'bg-gray-100 text-gray-800',
+    in_reparatur: 'bg-yellow-100 text-yellow-800',
+    verkaufsbereit: 'bg-blue-100 text-blue-800', // Blau für "Verkaufsbereit"
+    zum_verkauf: 'bg-green-100 text-green-800',
+    verkauft: 'bg-purple-100 text-purple-800'
+  };
+  
   if (loading || !device) {
     return <Spinner />;
   }
@@ -267,15 +300,8 @@ const DeviceDetails = () => {
               
               <p className="text-gray-600">Status:</p>
               <div>
-                <span className={`inline-block px-2 py-1 rounded text-xs font-medium 
-                  ${device.status === 'gekauft' ? 'bg-blue-100 text-blue-800' : 
-                    device.status === 'in_reparatur' ? 'bg-yellow-100 text-yellow-800' :
-                    device.status === 'zum_verkauf' ? 'bg-green-100 text-green-800' :
-                    'bg-purple-100 text-purple-800'}`}>
-                  {device.status === 'gekauft' ? 'Gekauft' :
-                   device.status === 'in_reparatur' ? 'In Reparatur' :
-                   device.status === 'zum_verkauf' ? 'Zum Verkauf' :
-                   'Verkauft'}
+                <span className={`px-2 py-1 rounded text-xs font-semibold ${statusColorMap[device.status] || 'bg-gray-200 text-gray-800'}`}>
+                  {getStatusLabel(device.status)}
                 </span>
               </div>
               
@@ -301,31 +327,16 @@ const DeviceDetails = () => {
           
           <div className="mb-4">
             <h4 className="font-semibold mb-2">Status ändern</h4>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleStatusChange('gekauft')}
-                className={`px-3 py-1 rounded ${device.status === 'gekauft' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'}`}
-              >
-                Gekauft
-              </button>
-              <button
-                onClick={() => handleStatusChange('in_reparatur')}
-                className={`px-3 py-1 rounded ${device.status === 'in_reparatur' ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800'}`}
-              >
-                In Reparatur
-              </button>
-              <button
-                onClick={() => handleStatusChange('zum_verkauf')}
-                className={`px-3 py-1 rounded ${device.status === 'zum_verkauf' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800'}`}
-              >
-                Zum Verkauf
-              </button>
-              <button
-                onClick={() => handleStatusChange('verkauft')}
-                className={`px-3 py-1 rounded ${device.status === 'verkauft' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-800'}`}
-              >
-                Verkauft
-              </button>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'].map(st => (
+                <button
+                  key={st}
+                  className={`px-3 py-1 rounded ${device.status === st ? statusColorMap[st] : statusInactiveColorMap[st]}`}
+                  onClick={() => handleStatusChange(st)}
+                >
+                  {getStatusLabel(st)}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -454,32 +465,46 @@ const DeviceDetails = () => {
                 </p>
               ) : (
                 <div className="bg-gray-50 p-2 rounded max-h-60 overflow-y-auto">
-                  {filteredParts.map(part => (
-                    <div key={part._id} className="flex justify-between items-center py-1 border-b last:border-0">
-                      <div>
-                        <div className="flex items-center">
-                          <p className="font-medium">{part.partNumber}</p>
-                          {part.category && (
-                            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                              {part.category}
-                            </span>
-                          )}
+                  {filteredParts.map(part => {
+                    const isSelected = selectedParts.some(p => p.partNumber === part.partNumber);
+                    const isInStock = typeof part.stock === 'number' ? part.stock > 0 : true;
+                    return (
+                      <div key={part._id} className="flex justify-between items-center py-1 border-b last:border-0">
+                        <div>
+                          <div className="flex items-center">
+                            <p className="font-medium">{part.partNumber}</p>
+                            {part.category && (
+                              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                {part.category}
+                              </span>
+                            )}
+                            {/* Lagerstatus anzeigen */}
+                            {isInStock ? (
+                              <span className="ml-2 text-green-600 text-xs font-semibold flex items-center">
+                                ✓ auf Lager
+                              </span>
+                            ) : (
+                              <span className="ml-2 text-red-500 text-xs font-semibold">
+                                Nicht auf Lager
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">{part.description}</p>
+                          <p className="text-xs text-gray-500">Für: {part.forModel}</p>
                         </div>
-                        <p className="text-sm text-gray-600">{part.description}</p>
-                        <p className="text-xs text-gray-500">Für: {part.forModel}</p>
+                        <div className="flex items-center">
+                          <span className="mr-2">{part.price?.toFixed(2)} €</span>
+                          <button
+                            onClick={() => handleAddPart(part)}
+                            className="text-blue-600 hover:text-blue-800"
+                            disabled={isSelected}
+                          >
+                            {isSelected ? '✓' : '+'}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center">
-                        <span className="mr-2">{part.price?.toFixed(2)} €</span>
-                        <button
-                          onClick={() => handleAddPart(part)}
-                          className="text-blue-600 hover:text-blue-800"
-                          disabled={selectedParts.some(p => p.partNumber === part.partNumber)}
-                        >
-                          {selectedParts.some(p => p.partNumber === part.partNumber) ? '✓' : '+'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -61,6 +61,33 @@ const Dashboard = () => {
     }
   };
 
+  // Hilfsfunktion für Status-Label (falls nicht vorhanden, ergänzen)
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'gekauft':
+        return 'Gekauft';
+      case 'in_reparatur':
+        return 'In Reparatur';
+      case 'verkaufsbereit':
+        return 'Verkaufsbereit';
+      case 'zum_verkauf':
+        return 'Zum Verkauf';
+      case 'verkauft':
+        return 'Verkauft';
+      default:
+        return 'Unbekannt';
+    }
+  };
+
+  // Füge eine Status-Farbzuordnung für Badges/Labels hinzu (direkt nach getStatusLabel oder an passender Stelle):
+  const statusColorMap = {
+    gekauft: 'bg-gray-100 text-gray-800',
+    in_reparatur: 'bg-yellow-100 text-yellow-800',
+    verkaufsbereit: 'bg-blue-100 text-blue-800', // Blau für Verkaufsbereit
+    zum_verkauf: 'bg-green-100 text-green-800',
+    verkauft: 'bg-purple-100 text-purple-800'
+  };
+
   // Stellen Sie sicher, dass stats ein Objekt ist
   const safeStats = stats || {
     totalDevices: 0,
@@ -161,8 +188,8 @@ const Dashboard = () => {
                       </td>
                       <td className="py-2 px-4 whitespace-nowrap">{device.imei}</td>
                       <td className="py-2 px-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusClass(device.status)}`}>
-                          {getStatusText(device.status)}
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${statusColorMap[device.status] || 'bg-gray-100 text-gray-800'}`}>
+                          {getStatusLabel(device.status)}
                         </span>
                       </td>
                       <td className="py-2 px-4 whitespace-nowrap">
@@ -217,6 +244,24 @@ const Dashboard = () => {
                   style={{ 
                     width: `${Array.isArray(devices) ? 
                       (devices.filter(d => d.status === 'in_reparatur').length / Math.max(devices.length, 1)) * 100 : 0}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="bg-blue-100 p-4 rounded">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">Verkaufsbereit</span>
+                <span className="text-blue-600 font-bold">
+                  {Array.isArray(devices) ? devices.filter(d => d.status === 'verkaufsbereit').length : 0}
+                </span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-500 h-2.5 rounded-full" 
+                  style={{ 
+                    width: `${Array.isArray(devices) ? 
+                      (devices.filter(d => d.status === 'verkaufsbereit').length / Math.max(devices.length, 1)) * 100 : 0}%` 
                   }}
                 ></div>
               </div>

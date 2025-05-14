@@ -9,7 +9,8 @@ const EditPart = ({ part, onClose, onSave }) => {
     description: '',
     forModel: '',
     price: '',
-    category: ''
+    category: '',
+    stock: 0
   });
   const [alert, setAlert] = useState(null);
 
@@ -20,16 +21,21 @@ const EditPart = ({ part, onClose, onSave }) => {
         description: part.description,
         forModel: part.forModel,
         price: part.price.toString(),
-        category: part.category || ''
+        category: part.category || '',
+        stock: part.stock || 0
       });
     }
   }, [part]);
 
-  const onChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: name === 'stock' ? parseInt(value, 10) || 0 : value
+    });
   };
 
-  const onSubmit = async e => {
+  const onSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.partNumber || !formData.description || !formData.forModel || !formData.price || !formData.category) {
@@ -40,7 +46,8 @@ const EditPart = ({ part, onClose, onSave }) => {
     try {
       await onSave(part._id, {
         ...formData,
-        price: parseFloat(formData.price)
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock, 10) || 0
       });
       onClose();
     } catch (err) {
@@ -131,6 +138,22 @@ const EditPart = ({ part, onClose, onSave }) => {
                 min="0"
                 step="0.01"
                 required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="stock" className="block text-gray-700 font-medium mb-2">
+                Lagerbestand
+              </label>
+              <input
+                type="number"
+                id="stock"
+                name="stock"
+                value={formData.stock}
+                onChange={onChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="0"
+                step="1"
               />
             </div>
 

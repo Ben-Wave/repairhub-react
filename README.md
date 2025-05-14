@@ -8,7 +8,7 @@ Eine Webapplikation zur Verwaltung von gebrauchten Smartphones mit IMEI-Abfrage 
 - Speicherung der Gerätedaten in einer Datenbank
 - Ersatzteilkatalog mit Preisen
 - Berechnung von Verkaufspreisen basierend auf Einkaufspreis, Ersatzteilen und gewünschtem Gewinn
-- Statusverwaltung der Geräte (gekauft, in Reparatur, zum Verkauf, verkauft)
+- Statusverwaltung der Geräte (gekauft, in Reparatur, verkaufsbereit, zum Verkauf, verkauft)
 - Dashboard mit Statistiken und Übersicht
 - Umfassende Geräteliste mit Filterfunktionen
 

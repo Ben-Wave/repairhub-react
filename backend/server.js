@@ -204,6 +204,7 @@ app.put('/api/devices/:id', async (req, res) => {
     const { purchasePrice, damageDescription, parts, desiredProfit, status, actualSellingPrice } = req.body;
     
     const device = await Device.findById(req.params.id);
+    const prevDevice = await Device.findById(req.params.id);
     if (!device) {
       return res.status(404).json({ error: 'Gerät nicht gefunden' });
     }
@@ -211,7 +212,35 @@ app.put('/api/devices/:id', async (req, res) => {
     // Felder aktualisieren
     if (purchasePrice !== undefined) device.purchasePrice = purchasePrice;
     if (damageDescription !== undefined) device.damageDescription = damageDescription;
-    if (parts !== undefined) device.parts = parts;
+    if (parts !== undefined) {
+      // Vergleiche alte und neue Teile
+      const prevParts = prevDevice ? prevDevice.parts || [] : [];
+      const prevPartNumbers = prevParts.map(p => p.partNumber);
+      const newPartNumbers = parts.map(p => p.partNumber);
+
+      // Finde hinzugefügte Teile
+      const addedPartNumbers = newPartNumbers.filter(pn => !prevPartNumbers.includes(pn));
+      // Finde entfernte Teile
+      const removedPartNumbers = prevPartNumbers.filter(pn => !newPartNumbers.includes(pn));
+
+      // Bestand für hinzugefügte Teile reduzieren
+      for (const partNumber of addedPartNumbers) {
+        await Part.findOneAndUpdate(
+          { partNumber },
+          { $inc: { stock: -1 } }
+        );
+      }
+      // Bestand für entfernte Teile wieder erhöhen
+      for (const partNumber of removedPartNumbers) {
+        await Part.findOneAndUpdate(
+          { partNumber },
+          { $inc: { stock: 1 } }
+        );
+      }
+
+      device.parts = parts;
+    }
+    
     if (desiredProfit !== undefined) device.desiredProfit = desiredProfit;
     
     // Wenn der tatsächliche Verkaufspreis angegeben wird, diesen speichern
@@ -255,7 +284,7 @@ app.delete('/api/devices/:id', async (req, res) => {
 // Ersatzteile-Routen
 app.post('/api/parts', async (req, res) => {
   try {
-    const { partNumber, description, price, forModel, category } = req.body;
+    const { partNumber, description, price, forModel, category, stock } = req.body;
     
     const existingPart = await Part.findOne({ partNumber });
     if (existingPart) {
@@ -267,7 +296,8 @@ app.post('/api/parts', async (req, res) => {
       description,
       price,
       forModel,
-      category
+      category,
+      stock: stock || 0 // <--- NEU
     });
     
     await newPart.save();
@@ -323,7 +353,7 @@ app.get('/api/parts/:id', async (req, res) => {
 
 app.put('/api/parts/:id', async (req, res) => {
   try {
-    const { partNumber, description, price, forModel, category } = req.body;
+    const { partNumber, description, price, forModel, category, stock } = req.body;
     
     const part = await Part.findById(req.params.id);
     if (!part) {
@@ -343,6 +373,7 @@ app.put('/api/parts/:id', async (req, res) => {
     part.price = price;
     part.forModel = forModel;
     if (category) part.category = category;
+    if (typeof stock !== 'undefined') part.stock = Number(stock) || 0;
     part.updatedAt = new Date();
     
     await part.save();
