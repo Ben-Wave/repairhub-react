@@ -130,7 +130,7 @@ const Dashboard = () => {
             <div className="ml-4">
               <p className="text-gray-500 text-sm">Gesamtgewinn</p>
               <p className="text-2xl font-bold text-gray-800">
-                {safeStats.totalProfit ? safeStats.totalProfit.toFixed(2) : "0.00"} €
+                {safeStats.actualProfit ? safeStats.actualProfit.toFixed(2) : "0.00"} €
               </p>
             </div>
           </div>
