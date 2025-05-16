@@ -51,6 +51,8 @@ const DeviceList = () => {
         return <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">Zum Verkauf</span>;
       case 'verkauft':
         return <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">Verkauft</span>;
+      case 'verkaufsbereit':
+        return <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">Verkaufsbereit</span>;
       default:
         return <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium">Unbekannt</span>;
     }

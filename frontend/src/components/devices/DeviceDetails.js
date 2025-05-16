@@ -209,21 +209,22 @@ const DeviceDetails = () => {
     }
   };
 
-  // Einheitliche Farbe für Status-Buttons und Status-Badges
+  // Einheitliche Farbe für Status-Buttons und Status-Badges (nur Farben, keine Größen)
   const statusColorMap = {
-    gekauft: 'bg-gray-600 text-white',
-    in_reparatur: 'bg-yellow-600 text-white',
-    verkaufsbereit: 'bg-blue-600 text-white', // Blau für "Verkaufsbereit"
-    zum_verkauf: 'bg-green-600 text-white',
-    verkauft: 'bg-purple-600 text-white'
-  };
-  const statusInactiveColorMap = {
-    gekauft: 'bg-gray-100 text-gray-800',
+    gekauft: 'bg-blue-100 text-blue-800',
     in_reparatur: 'bg-yellow-100 text-yellow-800',
-    verkaufsbereit: 'bg-blue-100 text-blue-800', // Blau für "Verkaufsbereit"
+    verkaufsbereit: 'bg-orange-100 text-orange-800',
     zum_verkauf: 'bg-green-100 text-green-800',
     verkauft: 'bg-purple-100 text-purple-800'
   };
+  const statusActiveColorMap = {
+    gekauft: 'bg-blue-600 text-white',
+    in_reparatur: 'bg-yellow-600 text-white',
+    verkaufsbereit: 'bg-orange-600 text-white',
+    zum_verkauf: 'bg-green-600 text-white',
+    verkauft: 'bg-purple-600 text-white'
+  };
+  const statusInactiveColorMap = statusColorMap;
   
   if (loading || !device) {
     return <Spinner />;
@@ -300,7 +301,7 @@ const DeviceDetails = () => {
               
               <p className="text-gray-600">Status:</p>
               <div>
-                <span className={`px-2 py-1 rounded text-xs font-semibold ${statusColorMap[device.status] || 'bg-gray-200 text-gray-800'}`}>
+                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusColorMap[device.status] || 'bg-gray-100 text-gray-800'}`}>
                   {getStatusLabel(device.status)}
                 </span>
               </div>
@@ -331,7 +332,7 @@ const DeviceDetails = () => {
               {['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'].map(st => (
                 <button
                   key={st}
-                  className={`px-3 py-1 rounded ${device.status === st ? statusColorMap[st] : statusInactiveColorMap[st]}`}
+                  className={`px-3 py-1 rounded ${device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]}`}
                   onClick={() => handleStatusChange(st)}
                 >
                   {getStatusLabel(st)}

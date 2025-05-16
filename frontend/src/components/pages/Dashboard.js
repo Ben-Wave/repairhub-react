@@ -79,11 +79,11 @@ const Dashboard = () => {
     }
   };
 
-  // Füge eine Status-Farbzuordnung für Badges/Labels hinzu (direkt nach getStatusLabel oder an passender Stelle):
+  // Farbschema für Status (nur Farben, keine Größen)
   const statusColorMap = {
-    gekauft: 'bg-gray-100 text-gray-800',
+    gekauft: 'bg-blue-100 text-blue-800',
     in_reparatur: 'bg-yellow-100 text-yellow-800',
-    verkaufsbereit: 'bg-blue-100 text-blue-800', // Blau für Verkaufsbereit
+    verkaufsbereit: 'bg-orange-100 text-orange-800',
     zum_verkauf: 'bg-green-100 text-green-800',
     verkauft: 'bg-purple-100 text-purple-800'
   };
