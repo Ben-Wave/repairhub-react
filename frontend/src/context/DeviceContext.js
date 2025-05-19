@@ -77,6 +77,34 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
+  // IMEI überprüfen
+  const checkImei = async (imei) => {
+    try {
+      dispatch({ type: 'SET_LOADING' });
+      
+      const config = {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      const res = await axios.post('/api/devices/check-imei', { imei }, config);
+      
+      dispatch({
+        type: 'GET_DEVICE',
+        payload: res.data
+      });
+      
+      return res.data;
+    } catch (err) {
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: err.response?.data?.error || 'Fehler bei der IMEI-Überprüfung'
+      });
+      throw err;
+    }
+  };
+
   // Neues Gerät hinzufügen
   const addDevice = async (device) => {
     const config = {
@@ -147,6 +175,11 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
+  // Fehler löschen
+  const clearErrors = () => {
+    dispatch({ type: 'CLEAR_ERRORS' });
+  };
+
   return (
     <DeviceContext.Provider
       value={{
@@ -160,7 +193,9 @@ export const DeviceProvider = ({ children }) => {
         addDevice,
         updateDevice,
         deleteDevice,
-        getStats
+        getStats,
+        checkImei,
+        clearErrors
       }}
     >
       {children}
