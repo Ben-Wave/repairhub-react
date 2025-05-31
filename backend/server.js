@@ -5,6 +5,8 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const cron = require('node-cron');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
@@ -85,7 +87,7 @@ const syncConfigSchema = new mongoose.Schema({
 
 // Models
 // Models laden
-const { Part, Device, SyncConfig } = require('./models');
+const { Part, Device, SyncConfig, Reseller, DeviceAssignment } = require('./models');
 
 
 // Models exportieren, damit sie in anderen Modulen verwendet werden können
@@ -437,6 +439,25 @@ app.get('/api/stats', async (req, res) => {
     res.status(500).json({ error: 'Fehler beim Abrufen der Statistiken' });
   }
 });
+
+
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes.router);
+
+const resellerRoutes = require('./routes/reseller');
+app.use('/api/reseller', resellerRoutes);
+
+const adminResellerRoutes = require('./routes/admin-reseller');
+app.use('/api/admin', adminResellerRoutes);
+
+const { router: adminAuthRoutes } = require('./routes/admin-auth');
+app.use('/api/admin-auth', adminAuthRoutes);
+
+// Vor dem 404 Fallback hinzufügen:
+app.get('/reseller*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
+
 
 // Fallback für alle anderen Routen
 app.use((req, res) => {

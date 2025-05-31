@@ -1,7 +1,7 @@
 // backend/models/index.js
 const mongoose = require('mongoose');
 
-// Device Schema
+// Device Schema (bestehend, nur erweitert für Reseller-System)
 const deviceSchema = new mongoose.Schema({
   imei: { type: String, required: true, unique: true },
   imei2: String,
@@ -31,12 +31,11 @@ const deviceSchema = new mongoose.Schema({
   }],
   desiredProfit: { type: Number, default: 0 },
   sellingPrice: { type: Number, default: 0 },
-  // Neues Feld für den tatsächlichen Verkaufspreis
   actualSellingPrice: { type: Number },
   status: { 
     type: String, 
     default: 'gekauft', 
-    enum: ['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'] // NEU: 'verkaufsbereit'
+    enum: ['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft']
   },
   purchaseDate: { type: Date, default: Date.now },
   soldDate: Date,
@@ -45,7 +44,7 @@ const deviceSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Part 
+// Part Schema (bestehend)
 const partSchema = new mongoose.Schema({
   partNumber: { type: String, required: true, unique: true },
   description: { type: String, required: true },
@@ -54,12 +53,12 @@ const partSchema = new mongoose.Schema({
   category: { type: String, required: true },
   externalSource: { type: String, default: null },
   inStock: { type: Boolean, default: true },
-  stock: { type: Number, default: 0 }, // <--- NEU: Lagerbestand
+  stock: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// SyncConfig Schema
+// SyncConfig Schema (bestehend)
 const syncConfigSchema = new mongoose.Schema({
   lastSyncTime: { type: Date, default: null },
   syncEnabled: { type: Boolean, default: true },
@@ -72,9 +71,58 @@ const syncConfigSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Neue Schemas für Reseller-System
+const resellerSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true },
+  company: { type: String },
+  phone: { type: String },
+  isActive: { type: Boolean, default: true },
+  // NEU: Felder für Passwort-Reset
+  mustChangePassword: { type: Boolean, default: true }, // Muss Passwort bei erstem Login ändern
+  firstLogin: { type: Boolean, default: true }, // Ist das der erste Login?
+  lastPasswordChange: { type: Date }, // Wann wurde Passwort zuletzt geändert
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const deviceAssignmentSchema = new mongoose.Schema({
+  deviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Device', required: true },
+  resellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reseller', required: true },
+  assignedAt: { type: Date, default: Date.now },
+  minimumPrice: { type: Number, required: true },
+  status: { 
+    type: String, 
+    enum: ['assigned', 'received', 'sold', 'returned'], 
+    default: 'assigned' 
+  },
+  receivedAt: { type: Date },
+  soldAt: { type: Date },
+  actualSalePrice: { type: Number },
+  notes: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const adminSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true },
+  role: { type: String, default: 'admin', enum: ['admin', 'super_admin'] },
+  isActive: { type: Boolean, default: true },
+  lastLogin: { type: Date },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
 // Export models (mit Schutz gegen OverwriteModelError)
 module.exports = {
   Device: mongoose.models.Device || mongoose.model('Device', deviceSchema),
   Part: mongoose.models.Part || mongoose.model('Part', partSchema),
-  SyncConfig: mongoose.models.SyncConfig || mongoose.model('SyncConfig', syncConfigSchema)
+  SyncConfig: mongoose.models.SyncConfig || mongoose.model('SyncConfig', syncConfigSchema),
+  Reseller: mongoose.models.Reseller || mongoose.model('Reseller', resellerSchema),
+  DeviceAssignment: mongoose.models.DeviceAssignment || mongoose.model('DeviceAssignment', deviceAssignmentSchema),
+  Admin: mongoose.models.Admin || mongoose.model('Admin', adminSchema),
 };
