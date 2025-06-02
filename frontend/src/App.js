@@ -149,15 +149,31 @@ const CalculatorOnlyApp = ({ admin, onLogout }) => {
 
 // Admin Routes Komponente
 const AdminRoutes = ({ admin, onLogout }) => {
-  const { hasPermission, userPermissions } = usePermissions();
+  const { hasPermission, userPermissions, loading } = usePermissions();
 
-  // Wenn Benutzer nur Preisrechner-Berechtigung hat
+  // Während die Berechtigungen laden, zeige einen Spinner
+  if (loading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-100">
+        <Navbar admin={admin} onLogout={onLogout} />
+        <main className="container mx-auto px-4 py-8 flex-grow flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Lade Berechtigungen...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Wenn Benutzer nur Preisrechner-Berechtigung hat (und sonst nichts)
   if (userPermissions && 
       userPermissions.tools && 
       userPermissions.tools.priceCalculator &&
       !hasPermission('devices', 'view') &&
       !hasPermission('parts', 'create') &&
-      !hasPermission('system', 'userManagement')) {
+      !hasPermission('system', 'userManagement') &&
+      !hasPermission('system', 'statistics')) {
     return <CalculatorOnlyApp admin={admin} onLogout={onLogout} />;
   }
 
@@ -166,10 +182,13 @@ const AdminRoutes = ({ admin, onLogout }) => {
       <Navbar admin={admin} onLogout={onLogout} />
       <main className="container mx-auto px-4 py-8 flex-grow">
         <Routes>
+          {/* Dashboard Route - verfügbar für alle mit system.statistics ODER wenn keine spezifischen Berechtigungen gesetzt sind */}
           <Route path="/" element={
-            hasPermission('system', 'statistics') ? 
+            hasPermission('system', 'statistics') || !userPermissions ? 
             <Dashboard /> : 
-            <Navigate to="/calculator" replace />
+            hasPermission('tools', 'priceCalculator') ?
+            <Navigate to="/calculator" replace /> :
+            <Navigate to="/unauthorized" replace />
           } />
           
           {/* Geräte-Routen */}
