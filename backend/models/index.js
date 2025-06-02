@@ -1,4 +1,4 @@
-// backend/models/index.js
+// backend/models/index.js - ERWEITERT basierend auf deiner bestehenden Datei
 const mongoose = require('mongoose');
 
 // Device Schema (bestehend, nur erweitert für Reseller-System)
@@ -111,12 +111,58 @@ const adminSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   name: { type: String, required: true },
-  role: { type: String, default: 'admin', enum: ['admin', 'super_admin'] },
+  role: { type: String, default: 'admin', enum: ['super_admin', 'admin', 'manager', 'viewer'] },
+  roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserRole' }, // Verweis auf detaillierte Rolle
   isActive: { type: Boolean, default: true },
   lastLogin: { type: Date },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+// ERWEITERT: UserRole Schema mit tools.priceCalculator
+const userRoleSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true }, // z.B. "admin", "manager", "viewer", "calculator_user"
+  displayName: { type: String, required: true }, // z.B. "Administrator", "Manager", "Nur Ansicht", "Preisrechner Benutzer"
+  permissions: {
+    // Geräte-Berechtigung
+    devices: {
+      view: { type: Boolean, default: false },
+      create: { type: Boolean, default: false },
+      edit: { type: Boolean, default: false },
+      delete: { type: Boolean, default: false }
+    },
+    // Ersatzteile-Berechtigung
+    parts: {
+      view: { type: Boolean, default: false },
+      create: { type: Boolean, default: false },
+      edit: { type: Boolean, default: false },
+      delete: { type: Boolean, default: false }
+    },
+    // Reseller-Berechtigung
+    resellers: {
+      view: { type: Boolean, default: false },
+      create: { type: Boolean, default: false },
+      edit: { type: Boolean, default: false },
+      delete: { type: Boolean, default: false },
+      assign: { type: Boolean, default: false } // Geräte zuweisen
+    },
+    // System-Berechtigung
+    system: {
+      userManagement: { type: Boolean, default: false },
+      settings: { type: Boolean, default: false },
+      statistics: { type: Boolean, default: false }
+    },
+    // NEU: Tools-Berechtigung
+    tools: {
+      priceCalculator: { type: Boolean, default: false }
+    }
+  },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 // Export models (mit Schutz gegen OverwriteModelError)
 module.exports = {
   Device: mongoose.models.Device || mongoose.model('Device', deviceSchema),
@@ -125,4 +171,5 @@ module.exports = {
   Reseller: mongoose.models.Reseller || mongoose.model('Reseller', resellerSchema),
   DeviceAssignment: mongoose.models.DeviceAssignment || mongoose.model('DeviceAssignment', deviceAssignmentSchema),
   Admin: mongoose.models.Admin || mongoose.model('Admin', adminSchema),
+  UserRole: mongoose.models.UserRole || mongoose.model('UserRole', userRoleSchema),
 };

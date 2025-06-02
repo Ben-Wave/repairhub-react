@@ -1,4 +1,4 @@
-// server.js - Hauptdatei für das Backend
+// server.js - Hauptdatei für das Backend mit Rollensystem
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -16,86 +16,11 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Schemas
-const partSchema = new mongoose.Schema({
-  partNumber: { type: String, required: true, unique: true },
-  description: { type: String, required: true },
-  price: { type: Number, required: true },
-  forModel: { type: String, required: true },
-  category: { type: String, required: true }, // z.B. "Charging Port", "Screen", "Battery", etc.
-  externalSource: { type: String, default: null }, // 'foneday' für importierte Ersatzteile
-  inStock: { type: Boolean, default: true }, // Verfügbarkeitsstatus
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-const deviceSchema = new mongoose.Schema({
-  imei: { type: String, required: true, unique: true },
-  imei2: String,
-  serial: String,
-  model: String,
-  modelDesc: String,
-  thumbnail: String,
-  network: String,
-  meid: String,
-  warrantyStatus: String,
-  technicalSupport: Boolean,
-  repairCoverage: Boolean,
-  replaced: Boolean,
-  replacement: Boolean,
-  refurbished: Boolean,
-  demoUnit: Boolean,
-  fmiOn: Boolean,
-  lostMode: Boolean,
-  usaBlockStatus: String,
-  simLock: Boolean,
-  region: String,
-  
-  // Zusätzliche Felder
-  purchasePrice: { type: Number, default: 0 },
-  damageDescription: { type: String, default: '' },
-  parts: [{
-    partNumber: String,
-    price: Number
-  }],
-  desiredProfit: { type: Number, default: 0 },
-  sellingPrice: { type: Number, default: 0 },
-  // Neues Feld für den tatsächlichen Verkaufspreis
-  actualSellingPrice: { type: Number },
-  status: { type: String, default: 'gekauft', 
-    enum: ['gekauft', 'in_reparatur', 'zum_verkauf', 'verkauft'] },
-  purchaseDate: { type: Date, default: Date.now },
-  soldDate: Date,
-  apiResponse: Object,
-  
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-// Synchronisierungseinstellungen Schema
-const syncConfigSchema = new mongoose.Schema({
-  lastSyncTime: { type: Date, default: null },
-  syncEnabled: { type: Boolean, default: true },
-  syncInterval: { type: String, default: '0 0 * * *' }, // Standard: Täglich um Mitternacht
-  autoUpdatePrices: { type: Boolean, default: true },
-  addNewParts: { type: Boolean, default: true },
-  categories: [String], // Zu synchronisierende Kategorien (leer = alle)
-  models: [String], // Zu synchronisierende Modelle (leer = alle)
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-// Models
 // Models laden
-const { Part, Device, SyncConfig, Reseller, DeviceAssignment } = require('./models');
+const { Part, Device, SyncConfig, Reseller, DeviceAssignment, Admin, UserRole } = require('./models');
 
-
-// Models exportieren, damit sie in anderen Modulen verwendet werden können
-module.exports = {
-  Part,
-  Device,
-  SyncConfig
-};
+// Auth Middleware laden
+const { authenticateToken, requirePermission } = require('./routes/auth');
 
 // Routes einbinden
 // Foneday API Route
@@ -106,8 +31,30 @@ app.use('/api/foneday', fonedayRoutes);
 const syncRoutes = require('./routes/sync');
 app.use('/api/sync', syncRoutes);
 
-// IMEI-Abfrage und Gerät erstellen
-app.post('/api/devices/check-imei', async (req, res) => {
+// User Management Routes
+const userManagementRoutes = require('./routes/user-management');
+app.use('/api/user-management', userManagementRoutes);
+
+// Auth Routes (Reseller)
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes.router);
+
+// Admin Auth Routes
+const { router: adminAuthRoutes } = require('./routes/admin-auth');
+app.use('/api/admin-auth', adminAuthRoutes);
+
+// Reseller Routes
+const resellerRoutes = require('./routes/reseller');
+app.use('/api/reseller', resellerRoutes);
+
+// Admin Reseller Routes
+const adminResellerRoutes = require('./routes/admin-reseller');
+app.use('/api/admin', adminResellerRoutes);
+
+// ===== GESCHÜTZTE GERÄTE-ROUTES =====
+
+// IMEI-Abfrage und Gerät erstellen - benötigt devices.create
+app.post('/api/devices/check-imei', authenticateToken, requirePermission('devices', 'create'), async (req, res) => {
   try {
     const { imei } = req.body;
 
@@ -177,8 +124,8 @@ app.post('/api/devices/check-imei', async (req, res) => {
   }
 });
 
-// Alle Geräte abrufen
-app.get('/api/devices', async (req, res) => {
+// Alle Geräte abrufen - benötigt devices.view
+app.get('/api/devices', authenticateToken, requirePermission('devices', 'view'), async (req, res) => {
   try {
     const devices = await Device.find().sort({ createdAt: -1 });
     res.json(devices);
@@ -187,8 +134,8 @@ app.get('/api/devices', async (req, res) => {
   }
 });
 
-// Gerät nach ID abrufen
-app.get('/api/devices/:id', async (req, res) => {
+// Gerät nach ID abrufen - benötigt devices.view
+app.get('/api/devices/:id', authenticateToken, requirePermission('devices', 'view'), async (req, res) => {
   try {
     const device = await Device.findById(req.params.id);
     if (!device) {
@@ -200,8 +147,8 @@ app.get('/api/devices/:id', async (req, res) => {
   }
 });
 
-// Gerät aktualisieren
-app.put('/api/devices/:id', async (req, res) => {
+// Gerät aktualisieren - benötigt devices.edit
+app.put('/api/devices/:id', authenticateToken, requirePermission('devices', 'edit'), async (req, res) => {
   try {
     const { purchasePrice, damageDescription, parts, desiredProfit, status, actualSellingPrice } = req.body;
     
@@ -270,8 +217,8 @@ app.put('/api/devices/:id', async (req, res) => {
   }
 });
 
-// Gerät löschen
-app.delete('/api/devices/:id', async (req, res) => {
+// Gerät löschen - benötigt devices.delete
+app.delete('/api/devices/:id', authenticateToken, requirePermission('devices', 'delete'), async (req, res) => {
   try {
     const device = await Device.findByIdAndDelete(req.params.id);
     if (!device) {
@@ -283,33 +230,10 @@ app.delete('/api/devices/:id', async (req, res) => {
   }
 });
 
-// Ersatzteile-Routen
-app.post('/api/parts', async (req, res) => {
-  try {
-    const { partNumber, description, price, forModel, category, stock } = req.body;
-    
-    const existingPart = await Part.findOne({ partNumber });
-    if (existingPart) {
-      return res.status(400).json({ error: 'Ersatzteil mit dieser Nummer existiert bereits' });
-    }
-    
-    const newPart = new Part({
-      partNumber,
-      description,
-      price,
-      forModel,
-      category,
-      stock: stock || 0 // <--- NEU
-    });
-    
-    await newPart.save();
-    res.status(201).json(newPart);
-  } catch (error) {
-    res.status(500).json({ error: 'Fehler beim Erstellen des Ersatzteils' });
-  }
-});
+// ===== GESCHÜTZTE ERSATZTEILE-ROUTES =====
 
-app.get('/api/parts', async (req, res) => {
+// Ersatzteile abrufen - benötigt parts.view
+app.get('/api/parts', authenticateToken, requirePermission('parts', 'view'), async (req, res) => {
   try {
     const { forModel } = req.query;
     let query = {};
@@ -341,7 +265,34 @@ app.get('/api/parts', async (req, res) => {
   }
 });
 
-app.get('/api/parts/:id', async (req, res) => {
+// NEU: Spezielle Route für Preisrechner-Daten (benötigt nur tools.priceCalculator)
+app.get('/api/calculator/parts', authenticateToken, requirePermission('tools', 'priceCalculator'), async (req, res) => {
+  try {
+    const { forModel } = req.query;
+    let query = {};
+    
+    if (forModel) {
+      const simplifiedModel = forModel
+        .replace(/\s+(Black|White|Red|Blue|Green|Yellow|Purple|Pink|Starlight|Midnight|Silver|Gold|Graphite|Sierra Blue|Alpine Green|Product RED|Pacific Blue)\s+/, ' ')
+        .replace(/\s+\d+GB\s+/, ' ')
+        .trim();
+      
+      query.forModel = { 
+        $regex: simplifiedModel, 
+        $options: 'i'
+      };
+    }
+    
+    const parts = await Part.find(query).sort({ partNumber: 1 });
+    res.json(parts);
+  } catch (error) {
+    console.error('Error fetching calculator parts:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Ersatzteile für Preisrechner' });
+  }
+});
+
+// Ersatzteil nach ID abrufen - benötigt parts.view
+app.get('/api/parts/:id', authenticateToken, requirePermission('parts', 'view'), async (req, res) => {
   try {
     const part = await Part.findById(req.params.id);
     if (!part) {
@@ -353,7 +304,34 @@ app.get('/api/parts/:id', async (req, res) => {
   }
 });
 
-app.put('/api/parts/:id', async (req, res) => {
+// Ersatzteil erstellen - benötigt parts.create
+app.post('/api/parts', authenticateToken, requirePermission('parts', 'create'), async (req, res) => {
+  try {
+    const { partNumber, description, price, forModel, category, stock } = req.body;
+    
+    const existingPart = await Part.findOne({ partNumber });
+    if (existingPart) {
+      return res.status(400).json({ error: 'Ersatzteil mit dieser Nummer existiert bereits' });
+    }
+    
+    const newPart = new Part({
+      partNumber,
+      description,
+      price,
+      forModel,
+      category,
+      stock: stock || 0
+    });
+    
+    await newPart.save();
+    res.status(201).json(newPart);
+  } catch (error) {
+    res.status(500).json({ error: 'Fehler beim Erstellen des Ersatzteils' });
+  }
+});
+
+// Ersatzteil aktualisieren - benötigt parts.edit
+app.put('/api/parts/:id', authenticateToken, requirePermission('parts', 'edit'), async (req, res) => {
   try {
     const { partNumber, description, price, forModel, category, stock } = req.body;
     
@@ -385,7 +363,8 @@ app.put('/api/parts/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/parts/:id', async (req, res) => {
+// Ersatzteil löschen - benötigt parts.delete
+app.delete('/api/parts/:id', authenticateToken, requirePermission('parts', 'delete'), async (req, res) => {
   try {
     const part = await Part.findByIdAndDelete(req.params.id);
     if (!part) {
@@ -397,8 +376,10 @@ app.delete('/api/parts/:id', async (req, res) => {
   }
 });
 
-// Statistik-Routen
-app.get('/api/stats', async (req, res) => {
+// ===== GESCHÜTZTE STATISTIK-ROUTE =====
+
+// Statistik-Route - benötigt system.statistics
+app.get('/api/stats', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
   try {
     const totalDevices = await Device.countDocuments();
     const availableDevices = await Device.countDocuments({ status: { $ne: 'verkauft' } });
@@ -440,24 +421,10 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes.router);
-
-const resellerRoutes = require('./routes/reseller');
-app.use('/api/reseller', resellerRoutes);
-
-const adminResellerRoutes = require('./routes/admin-reseller');
-app.use('/api/admin', adminResellerRoutes);
-
-const { router: adminAuthRoutes } = require('./routes/admin-auth');
-app.use('/api/admin-auth', adminAuthRoutes);
-
 // Vor dem 404 Fallback hinzufügen:
 app.get('/reseller*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
-
 
 // Fallback für alle anderen Routen
 app.use((req, res) => {
