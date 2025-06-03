@@ -1,4 +1,4 @@
-// frontend/src/components/tools/PriceCalculator.js - DROPDOWN PROBLEM BEHOBEN
+// frontend/src/components/tools/PriceCalculator.js - KOMPLETT KORRIGIERT
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -8,12 +8,6 @@ const PriceCalculator = () => {
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState(null);
 
-  // Hersteller extrahieren
-  const availableManufacturers = [...new Set(parts.map(part => {
-    const match = part.forModel.match(/^[A-Za-z]+/);
-    return match ? match[0] : 'Sonstige';
-  }))].sort();
-
   // Standardwert für Hersteller: "iPhone"
   const [selectedManufacturer, setSelectedManufacturer] = useState('iPhone');
   const [selectedModel, setSelectedModel] = useState('');
@@ -21,6 +15,25 @@ const PriceCalculator = () => {
   const [selectedPartsByCategory, setSelectedPartsByCategory] = useState({});
   const [desiredProfit, setDesiredProfit] = useState(50);
   const [marketPrice, setMarketPrice] = useState(0);
+
+  // KORRIGIERT: getBaseModel Funktion AN DEN ANFANG verschoben
+  const getBaseModel = (modelString) => {
+    if (!modelString) return '';
+    
+    // Erweiterte Regex für bessere iPhone-Erkennung
+    const modelRegex = /^(iPhone \d+(?:\s+(?:mini|Mini|Pro|Pro Max))?)/i;
+    const modelMatch = modelString.match(modelRegex);
+    
+    if (modelMatch) {
+      // Normalisiere das Ergebnis (einheitliche Schreibweise)
+      return modelMatch[1]
+        .replace(/\s+mini$/i, ' Mini')
+        .replace(/\s+pro max$/i, ' Pro Max')
+        .replace(/\s+pro$/i, ' Pro');
+    }
+    
+    return '';
+  };
 
   useEffect(() => {
     loadData();
@@ -59,27 +72,62 @@ const PriceCalculator = () => {
     }
   };
 
-  // Modelle extrahieren
-  const availableModels = [...new Set(parts.map(part => part.forModel))].sort();
+  // Hersteller extrahieren
+  const availableManufacturers = [...new Set(parts.map(part => {
+    const match = part.forModel.match(/^[A-Za-z]+/);
+    return match ? match[0] : 'Sonstige';
+  }))].sort();
 
-  // Modelle für gewählten Hersteller
+  // Modelle extrahieren - KORRIGIERT mit Bereinigung
+  const availableModels = [...new Set(parts
+    .map(part => part.forModel)
+    .filter(model => model && model.length < 50 && !model.includes(',')) // Filtere komische Modell-Namen
+  )].sort();
+
+  // Modelle für gewählten Hersteller - KORRIGIERT
   const filteredModels = selectedManufacturer
-    ? [...new Set(parts.filter(part => part.forModel.startsWith(selectedManufacturer)).map(part => part.forModel))].sort()
+    ? [...new Set(parts
+        .filter(part => part.forModel.startsWith(selectedManufacturer))
+        .map(part => part.forModel)
+        .filter(model => model && model.length < 50 && !model.includes(',')) // Bereinigung
+      )].sort()
     : availableModels;
 
-  // Kategorien für das gewählte Modell
+  // Kategorien für das gewählte Modell - KORRIGIERT mit besserer Modell-Erkennung
   const availableCategories = parts
-    .filter(part => part.forModel === selectedModel)
+    .filter(part => {
+      if (!selectedModel) return false;
+      
+      // Direkte Übereinstimmung zuerst
+      if (part.forModel === selectedModel) return true;
+      
+      // Dann Basis-Modell Vergleich
+      const selectedBaseModel = getBaseModel(selectedModel);
+      const partBaseModel = getBaseModel(part.forModel);
+      
+      return selectedBaseModel && partBaseModel && 
+             selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
+    })
     .map(part => part.category)
     .filter((category, idx, arr) => arr.indexOf(category) === idx)
     .sort();
 
-  // Teile pro Kategorie für das gewählte Modell
+  // Teile pro Kategorie für das gewählte Modell - KORRIGIERT
   const partsByCategory = {};
   availableCategories.forEach(category => {
-    partsByCategory[category] = parts.filter(
-      part => part.forModel === selectedModel && part.category === category
-    );
+    partsByCategory[category] = parts.filter(part => {
+      if (part.category !== category) return false;
+      
+      // Direkte Übereinstimmung zuerst
+      if (part.forModel === selectedModel) return true;
+      
+      // Dann Basis-Modell Vergleich
+      const selectedBaseModel = getBaseModel(selectedModel);
+      const partBaseModel = getBaseModel(part.forModel);
+      
+      return selectedBaseModel && partBaseModel && 
+             selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
+    });
   });
 
   // Handler für Modellwechsel
@@ -208,14 +256,29 @@ const PriceCalculator = () => {
               <select
                 value={selectedModel}
                 onChange={handleModelChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10 max-w-full"
+                style={{
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
               >
                 <option value="">Bitte wählen...</option>
-                {filteredModels.map(model => (
-                  <option key={model} value={model}>{model}</option>
+                {filteredModels
+                  .filter(model => model.length < 50) // Filtere zu lange Modell-Namen aus
+                  .slice(0, 100) // Limitiere auf erste 100 Modelle
+                  .map(model => (
+                  <option key={model} value={model} title={model}>
+                    {model.length > 40 ? model.substring(0, 40) + '...' : model}
+                  </option>
                 ))}
               </select>
             </div>
+            {/* Debug Info */}
+            <p className="text-xs text-gray-500 mt-1">
+              {filteredModels.length} Modelle verfügbar
+            </p>
           </div>
 
           {selectedModel && (
@@ -234,9 +297,12 @@ const PriceCalculator = () => {
                         <div key={category} className="mb-4 last:mb-0">
                           <div className="font-semibold mb-3 text-blue-800 border-b border-blue-200 pb-1">
                             {category}
+                            <span className="ml-2 text-sm font-normal text-gray-600">
+                              ({partsByCategory[category]?.length || 0} Teile)
+                            </span>
                           </div>
                           <div className="space-y-2">
-                            {partsByCategory[category].map(part => (
+                            {partsByCategory[category]?.map(part => (
                               <label key={part._id} className="flex items-center p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
                                 <input
                                   type="checkbox"
@@ -250,7 +316,7 @@ const PriceCalculator = () => {
                                   <div className="text-lg font-bold text-green-600">{part.price.toFixed(2)} €</div>
                                 </div>
                               </label>
-                            ))}
+                            )) || []}
                           </div>
                         </div>
                       ))
