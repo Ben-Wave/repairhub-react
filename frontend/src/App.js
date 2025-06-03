@@ -1,4 +1,4 @@
-// frontend/src/App.js - Erweitert mit Rollen-Support
+// frontend/src/App.js - Erweitert mit Rollen-Support + ROUTING-FIX
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { DeviceProvider } from './context/DeviceContext';
@@ -166,13 +166,18 @@ const AdminRoutes = ({ admin, onLogout }) => {
     );
   }
 
-  // Wenn Benutzer nur Preisrechner-Berechtigung hat (und sonst nichts)
+  // Wenn Benutzer nur Preisrechner-Berechtigung hat (und keine anderen wichtigen Berechtigungen)
   if (userPermissions && 
       userPermissions.tools && 
       userPermissions.tools.priceCalculator &&
       !hasPermission('devices', 'view') &&
+      !hasPermission('devices', 'create') &&
       !hasPermission('parts', 'create') &&
+      !hasPermission('parts', 'edit') &&
+      !hasPermission('parts', 'delete') &&
+      !hasPermission('resellers', 'view') &&
       !hasPermission('system', 'userManagement') &&
+      !hasPermission('system', 'settings') &&
       !hasPermission('system', 'statistics')) {
     return <CalculatorOnlyApp admin={admin} onLogout={onLogout} />;
   }
@@ -298,8 +303,8 @@ function App() {
         <Router>
           <div className="App">
             <Routes>
-              {/* Reseller Routes - separate Layout, ungeschützt */}
-              <Route path="/reseller*" element={<ResellerApp />} />
+              {/* ROUTING-FIX: /reseller* → /reseller/* */}
+              <Route path="/reseller/*" element={<ResellerApp />} />
               
               {/* Admin Routes - geschützt vor Reseller-Zugriff UND mit Admin Login */}
               <Route path="/*" element={

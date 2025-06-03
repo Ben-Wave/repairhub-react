@@ -1,4 +1,4 @@
-// backend/routes/auth.js - ERWEITERT mit Rollen-Support
+// backend/routes/auth.js - ERWEITERT mit User-Passwort-Änderung
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -59,7 +59,7 @@ const requirePermission = (category, permission) => {
   };
 };
 
-// NEU: Admin Login Route
+// NEU: Admin Login Route - ERWEITERT für mustChangePassword
 router.post('/admin-login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -104,7 +104,10 @@ router.post('/admin-login', async (req, res) => {
         role: admin.role,
         permissions: admin.roleId ? admin.roleId.permissions : null,
         roleName: admin.roleId ? admin.roleId.name : null
-      }
+      },
+      // NEU: Passwort-Änderung erforderlich?
+      mustChangePassword: admin.mustChangePassword || false,
+      firstLogin: admin.firstLogin || false
     };
 
     res.json(responseData);
@@ -170,7 +173,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// NEU: Passwort ändern Route
+// NEU: Passwort ändern Route für BEIDE (Reseller UND Admin)
 router.post('/change-password', authenticateToken, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -183,13 +186,24 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Neues Passwort muss mindestens 6 Zeichen lang sein' });
     }
 
-    const reseller = await Reseller.findById(req.user.id);
-    if (!reseller) {
-      return res.status(404).json({ error: 'Reseller nicht gefunden' });
+    let user;
+    let UserModel;
+
+    // Bestimme ob es Admin oder Reseller ist
+    if (req.user.type === 'admin') {
+      UserModel = Admin;
+      user = await Admin.findById(req.user.id);
+    } else {
+      UserModel = Reseller;
+      user = await Reseller.findById(req.user.id);
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
     // Aktuelles Passwort prüfen
-    const validCurrentPassword = await bcrypt.compare(currentPassword, reseller.password);
+    const validCurrentPassword = await bcrypt.compare(currentPassword, user.password);
     if (!validCurrentPassword) {
       return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
     }
@@ -197,13 +211,13 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     // Neues Passwort hashen und speichern
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     
-    reseller.password = hashedNewPassword;
-    reseller.mustChangePassword = false;
-    reseller.firstLogin = false;
-    reseller.lastPasswordChange = new Date();
-    reseller.updatedAt = new Date();
+    user.password = hashedNewPassword;
+    user.mustChangePassword = false;
+    user.firstLogin = false;
+    user.lastPasswordChange = new Date();
+    user.updatedAt = new Date();
     
-    await reseller.save();
+    await user.save();
 
     res.json({ 
       message: 'Passwort erfolgreich geändert',
@@ -220,11 +234,21 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 // Profil abrufen
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    const reseller = await Reseller.findById(req.user.id).select('-password');
-    if (!reseller) {
-      return res.status(404).json({ error: 'Reseller nicht gefunden' });
+    if (req.user.type === 'admin') {
+      const admin = await Admin.findById(req.user.id)
+        .populate('roleId')
+        .select('-password');
+      if (!admin) {
+        return res.status(404).json({ error: 'Admin nicht gefunden' });
+      }
+      res.json(admin);
+    } else {
+      const reseller = await Reseller.findById(req.user.id).select('-password');
+      if (!reseller) {
+        return res.status(404).json({ error: 'Reseller nicht gefunden' });
+      }
+      res.json(reseller);
     }
-    res.json(reseller);
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Abrufen des Profils' });
   }
@@ -251,7 +275,9 @@ router.get('/user-info', authenticateToken, async (req, res) => {
           email: admin.email,
           role: admin.role,
           permissions: admin.roleId ? admin.roleId.permissions : null,
-          roleName: admin.roleId ? admin.roleId.name : null
+          roleName: admin.roleId ? admin.roleId.name : null,
+          mustChangePassword: admin.mustChangePassword || false,
+          firstLogin: admin.firstLogin || false
         }
       });
     } else {
@@ -262,7 +288,11 @@ router.get('/user-info', authenticateToken, async (req, res) => {
       
       res.json({
         type: 'reseller',
-        user: reseller
+        user: {
+          ...reseller.toObject(),
+          mustChangePassword: reseller.mustChangePassword || false,
+          firstLogin: reseller.firstLogin || false
+        }
       });
     }
   } catch (error) {

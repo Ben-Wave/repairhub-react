@@ -1,4 +1,4 @@
-// frontend/src/components/tools/PriceCalculator.js - ERWEITERT
+// frontend/src/components/tools/PriceCalculator.js - DROPDOWN PROBLEM BEHOBEN
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -182,36 +182,40 @@ const PriceCalculator = () => {
             <label className="block text-gray-700 font-medium mb-2">
               Hersteller auswählen
             </label>
-            <select
-              value={selectedManufacturer}
-              onChange={e => {
-                setSelectedManufacturer(e.target.value);
-                setSelectedModel('');
-                setSelectedPartsByCategory({});
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Alle</option>
-              {availableManufacturers.map(manufacturer => (
-                <option key={manufacturer} value={manufacturer}>{manufacturer}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedManufacturer}
+                onChange={e => {
+                  setSelectedManufacturer(e.target.value);
+                  setSelectedModel('');
+                  setSelectedPartsByCategory({});
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+              >
+                <option value="">Alle</option>
+                {availableManufacturers.map(manufacturer => (
+                  <option key={manufacturer} value={manufacturer}>{manufacturer}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="mb-4">
             <label className="block text-gray-700 font-medium mb-2">
               Modell auswählen
             </label>
-            <select
-              value={selectedModel}
-              onChange={handleModelChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Bitte wählen...</option>
-              {filteredModels.map(model => (
-                <option key={model} value={model}>{model}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedModel}
+                onChange={handleModelChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+              >
+                <option value="">Bitte wählen...</option>
+                {filteredModels.map(model => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {selectedModel && (
@@ -220,31 +224,38 @@ const PriceCalculator = () => {
                 <label className="block text-gray-700 font-medium mb-2">
                   Defekte Teile auswählen
                 </label>
-                <div className="border rounded p-4 max-h-60 overflow-y-auto bg-gray-50">
-                  {availableCategories.length === 0 ? (
-                    <p className="text-gray-500">Keine Ersatzteile für dieses Modell verfügbar</p>
-                  ) : (
-                    availableCategories.map(category => (
-                      <div key={category} className="mb-3">
-                        <div className="font-semibold mb-2 text-blue-800">{category}</div>
-                        {partsByCategory[category].map(part => (
-                          <label key={part._id} className="flex items-center mb-2 ml-2 p-2 hover:bg-white rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(selectedPartsByCategory[category] || []).includes(part._id)}
-                              onChange={() => handlePartToggle(category, part._id)}
-                              className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium">{part.description}</div>
-                              <div className="text-sm text-gray-600">Teil-Nr: {part.partNumber}</div>
-                              <div className="text-lg font-bold text-green-600">{part.price.toFixed(2)} €</div>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    ))
-                  )}
+                {/* DROPDOWN-FIX: Container ohne max-height für bessere Darstellung */}
+                <div className="border rounded p-4 bg-gray-50 relative">
+                  <div className="max-h-80 overflow-y-auto">
+                    {availableCategories.length === 0 ? (
+                      <p className="text-gray-500">Keine Ersatzteile für dieses Modell verfügbar</p>
+                    ) : (
+                      availableCategories.map(category => (
+                        <div key={category} className="mb-4 last:mb-0">
+                          <div className="font-semibold mb-3 text-blue-800 border-b border-blue-200 pb-1">
+                            {category}
+                          </div>
+                          <div className="space-y-2">
+                            {partsByCategory[category].map(part => (
+                              <label key={part._id} className="flex items-center p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                                <input
+                                  type="checkbox"
+                                  checked={(selectedPartsByCategory[category] || []).includes(part._id)}
+                                  onChange={() => handlePartToggle(category, part._id)}
+                                  className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 truncate">{part.description}</div>
+                                  <div className="text-sm text-gray-500">Teil-Nr: {part.partNumber}</div>
+                                  <div className="text-lg font-bold text-green-600">{part.price.toFixed(2)} €</div>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 

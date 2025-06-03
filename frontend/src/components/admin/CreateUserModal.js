@@ -1,4 +1,4 @@
-// 4. CreateUserModal.js - frontend/src/components/admin/CreateUserModal.js
+// CreateUserModal.js - frontend/src/components/admin/CreateUserModal.js - OHNE PASSWORT
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -6,13 +6,13 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: '',
     name: '',
     role: 'admin',
     roleId: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [createdUser, setCreatedUser] = useState(null);
 
   const handleChange = (e) => {
     setFormData({
@@ -28,9 +28,16 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
 
     try {
       const token = localStorage.getItem('adminToken');
-      await axios.post('/api/user-management/users', formData, {
+      const response = await axios.post('/api/user-management/users', formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      // Zeige das temporäre Passwort an
+      setCreatedUser({
+        ...response.data,
+        temporaryPassword: formData.username
+      });
+      
       onUserCreated();
     } catch (error) {
       setError(error.response?.data?.error || 'Fehler beim Erstellen des Benutzers');
@@ -39,6 +46,63 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
     }
   };
 
+  // Success View mit temporärem Passwort
+  if (createdUser) {
+    return (
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="mt-3">
+            <div className="text-center">
+              <div className="text-green-600 text-5xl mb-4">✓</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Benutzer erfolgreich erstellt
+              </h3>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+              <h4 className="font-medium text-yellow-800 mb-2">📋 Wichtige Information:</h4>
+              <div className="text-sm text-yellow-700 space-y-2">
+                <p><strong>Benutzername:</strong> {createdUser.username}</p>
+                <p><strong>Temporäres Passwort:</strong> 
+                  <span className="font-mono bg-yellow-100 px-2 py-1 rounded ml-2">
+                    {createdUser.temporaryPassword}
+                  </span>
+                </p>
+                <div className="border-t border-yellow-200 pt-2 mt-3">
+                  <p className="text-xs">
+                    ⚠️ <strong>Hinweis:</strong> Der Benutzer muss beim ersten Login ein neues Passwort festlegen.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-3 rounded-md mb-4">
+              <h4 className="font-medium text-gray-700 mb-2">Benutzerdetails:</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p><strong>Name:</strong> {createdUser.name}</p>
+                <p><strong>E-Mail:</strong> {createdUser.email}</p>
+                <p><strong>Rolle:</strong> {createdUser.role}</p>
+                {createdUser.roleId && (
+                  <p><strong>Detaillierte Rolle:</strong> Zugewiesen</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700"
+              >
+                Verstanden
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Create Form
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -53,6 +117,17 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
             </div>
           )}
 
+          {/* Info-Box über automatisches Passwort */}
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="flex items-start">
+              <div className="text-blue-400 text-lg mr-2">ℹ️</div>
+              <div className="text-sm text-blue-700">
+                <p className="font-medium mb-1">Automatisches Passwort-System</p>
+                <p>Das temporäre Passwort wird automatisch auf den Benutzernamen gesetzt. Der Benutzer muss beim ersten Login ein neues Passwort wählen.</p>
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Benutzername *</label>
@@ -63,7 +138,11 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
                 value={formData.username}
                 onChange={handleChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="z.B. max.mustermann"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Wird auch als temporäres Passwort verwendet
+              </p>
             </div>
 
             <div>
@@ -75,23 +154,12 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
                 value={formData.email}
                 onChange={handleChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="max.mustermann@firma.de"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Passwort *</label>
-              <input
-                type="password"
-                name="password"
-                required
-                value={formData.password}
-                onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Name *</label>
+              <label className="block text-sm font-medium text-gray-700">Vollständiger Name *</label>
               <input
                 type="text"
                 name="name"
@@ -99,6 +167,7 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
                 value={formData.name}
                 onChange={handleChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Max Mustermann"
               />
             </div>
 
@@ -129,6 +198,9 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
                   <option key={role._id} value={role._id}>{role.displayName}</option>
                 ))}
               </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Überschreibt die Standard-Berechtigungen der Basis-Rolle
+              </p>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">
@@ -144,7 +216,7 @@ const CreateUserModal = ({ onClose, onUserCreated, roles }) => {
                 disabled={loading}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 disabled:opacity-50"
               >
-                {loading ? 'Erstelle...' : 'Erstellen'}
+                {loading ? 'Erstelle...' : 'Benutzer erstellen'}
               </button>
             </div>
           </form>

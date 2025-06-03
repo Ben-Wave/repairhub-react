@@ -1,4 +1,4 @@
-// frontend/src/components/layout/Navbar.js - ERWEITERT mit Rollen-Support
+// frontend/src/components/layout/Navbar.js - DROPDOWN POSITION KORRIGIERT
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -163,32 +163,48 @@ const Navbar = ({ admin, onLogout }) => {
               </Link>
             )}
 
-            {/* Tools Dropdown - nur wenn Tools-Berechtigung vorhanden */}
+            {/* Tools Dropdown/Direct Link - KORRIGIERT für bessere Darstellung */}
             {hasToolsAccess && (
-              <div className="relative group">
-                <button className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                  isToolsActive ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-                }`}>
-                  Tools
-                  <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                  </svg>
-                </button>
-                
-                <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                  <div className="py-1">
-                    {toolsItems.map((item) => (
-                      <Link 
-                        key={item.path}
-                        to={item.path} 
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
+              <>
+                {toolsItems.length === 1 ? (
+                  // Nur ein Tool - direkter Link ohne Dropdown
+                  <Link 
+                    to={toolsItems[0].path}
+                    className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                      isActive(toolsItems[0].path) ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                    }`}
+                  >
+                    {toolsItems[0].label}
+                  </Link>
+                ) : (
+                  // Mehrere Tools - Dropdown mit KORRIGIERTER Positionierung
+                  <div className="relative group">
+                    <button className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                      isToolsActive ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                    }`}>
+                      Tools
+                      <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </button>
+                    
+                    {/* KORRIGIERT: right-0 statt left-0 für bessere Positionierung */}
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                      <div className="py-1">
+                        {toolsItems.map((item) => (
+                          <Link 
+                            key={item.path}
+                            to={item.path} 
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
           </div>
 
@@ -339,7 +355,7 @@ const Navbar = ({ admin, onLogout }) => {
        !hasPermission('parts', 'create') &&
        !hasPermission('system', 'userManagement') && (
         <div className="bg-blue-800 px-4 py-2 text-center text-sm">
-          🧮 Sie haben Zugriff auf den Preisrechner
+          🧮 Sie haben Zugriff auf den Preisrechner{hasPermission('parts', 'view') ? ' und Ersatzteile-Ansicht' : ''}
         </div>
       )}
     </nav>

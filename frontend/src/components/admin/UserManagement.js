@@ -1,9 +1,10 @@
-// 3. Frontend Komponente - frontend/src/components/admin/UserManagement.js (NEUE DATEI)
+// UserManagement.js - frontend/src/components/admin/UserManagement.js - KORRIGIERT
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import CreateUserModal from './CreateUserModal';
 import EditUserModal from './EditUserModal';
 import CreateRoleModal from './CreateRoleModal';
+import EditRoleModal from './EditRoleModal';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -13,6 +14,7 @@ const UserManagement = () => {
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [editingRole, setEditingRole] = useState(null); // NEU
 
   useEffect(() => {
     fetchUsers();
@@ -58,6 +60,42 @@ const UserManagement = () => {
       fetchUsers();
     } catch (error) {
       alert('Fehler beim Löschen des Benutzers: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
+    }
+  };
+
+  // NEU: Rolle löschen
+  const deleteRole = async (roleId) => {
+    if (!window.confirm('Sind Sie sicher, dass Sie diese Rolle löschen möchten?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      await axios.delete(`/api/user-management/roles/${roleId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchRoles();
+      alert('Rolle erfolgreich gelöscht');
+    } catch (error) {
+      alert('Fehler beim Löschen der Rolle: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
+    }
+  };
+
+  // NEU: Passwort zurücksetzen
+  const resetUserPassword = async (userId, username) => {
+    if (!window.confirm(`Passwort für Benutzer "${username}" auf Username zurücksetzen?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await axios.patch(`/api/user-management/users/${userId}/reset-password`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      alert(`Passwort zurückgesetzt! Neues temporäres Passwort: ${response.data.temporaryPassword}`);
+    } catch (error) {
+      alert('Fehler beim Zurücksetzen des Passworts: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
     }
   };
 
@@ -186,6 +224,12 @@ const UserManagement = () => {
                           }`}>
                             {getRoleDisplay(user)}
                           </span>
+                          {/* NEU: Passwort-Status Anzeige */}
+                          {user.mustChangePassword && (
+                            <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                              🔒 Muss Passwort ändern
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center mt-1">
                           <p className="text-sm text-gray-500">{user.email}</p>
@@ -217,13 +261,19 @@ const UserManagement = () => {
                         )}
                       </div>
 
-                      {/* Aktions-Buttons */}
-                      <div className="flex flex-col space-y-2">
+                      {/* ERWEITERTE Aktions-Buttons */}
+                      <div className="flex flex-col space-y-1">
                         <button
                           onClick={() => setEditingUser(user)}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-medium"
                         >
                           Bearbeiten
+                        </button>
+                        <button
+                          onClick={() => resetUserPassword(user._id, user.username)}
+                          className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs font-medium"
+                        >
+                          PW Reset
                         </button>
                         <button
                           onClick={() => toggleUserStatus(user._id, user.isActive)}
@@ -271,10 +321,11 @@ const UserManagement = () => {
                           <div>Zuweisen: {getPermissionIcon(user.roleId.permissions.resellers.assign)}</div>
                         </div>
                         <div>
-                          <strong>System:</strong>
+                          <strong>System & Tools:</strong>
                           <div>Benutzer: {getPermissionIcon(user.roleId.permissions.system.userManagement)}</div>
                           <div>Einstellungen: {getPermissionIcon(user.roleId.permissions.system.settings)}</div>
                           <div>Statistiken: {getPermissionIcon(user.roleId.permissions.system.statistics)}</div>
+                          <div>Preisrechner: {getPermissionIcon(user.roleId.permissions.tools.priceCalculator)}</div>
                         </div>
                       </div>
                     </div>
@@ -296,17 +347,30 @@ const UserManagement = () => {
                     <div>
                       <h3 className="text-lg font-medium text-gray-900">{role.displayName}</h3>
                       <p className="text-sm text-gray-500">System-Name: {role.name}</p>
+                      <p className="text-xs text-gray-400">
+                        Erstellt: {new Date(role.createdAt).toLocaleDateString('de-DE')}
+                      </p>
                     </div>
+                    {/* KORRIGIERT: Funktionierende Buttons */}
                     <div className="flex space-x-2">
-                      <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                      <button 
+                        onClick={() => setEditingRole(role)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium"
+                      >
                         Bearbeiten
+                      </button>
+                      <button 
+                        onClick={() => deleteRole(role._id)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium"
+                      >
+                        Löschen
                       </button>
                     </div>
                   </div>
                   
                   {/* Berechtigungsübersicht */}
                   <div className="mt-3 pt-3 border-t border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm">
                       <div>
                         <strong>Geräte:</strong>
                         <div>Ansehen: {getPermissionIcon(role.permissions.devices.view)}</div>
@@ -333,6 +397,10 @@ const UserManagement = () => {
                         <div>Benutzer: {getPermissionIcon(role.permissions.system.userManagement)}</div>
                         <div>Einstellungen: {getPermissionIcon(role.permissions.system.settings)}</div>
                         <div>Statistiken: {getPermissionIcon(role.permissions.system.statistics)}</div>
+                      </div>
+                      <div>
+                        <strong>Tools:</strong>
+                        <div>Preisrechner: {getPermissionIcon(role.permissions.tools.priceCalculator)}</div>
                       </div>
                     </div>
                   </div>
@@ -373,6 +441,18 @@ const UserManagement = () => {
           onUserUpdated={() => {
             fetchUsers();
             setEditingUser(null);
+          }}
+        />
+      )}
+
+      {/* NEU: EditRoleModal */}
+      {editingRole && (
+        <EditRoleModal
+          role={editingRole}
+          onClose={() => setEditingRole(null)}
+          onRoleUpdated={() => {
+            fetchRoles();
+            setEditingRole(null);
           }}
         />
       )}

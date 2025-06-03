@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import AdminLogin from './AdminLogin';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const AdminApp = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [admin, setAdmin] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -23,9 +26,15 @@ const AdminApp = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const handleLogin = (adminData, token) => {
+  const handleLogin = (adminData, token, passwordStatus = {}) => {
     setAdmin(adminData);
     setIsAuthenticated(true);
+    
+    // NEU: Passwort-Status prüfen
+    if (passwordStatus.mustChangePassword) {
+      setMustChangePassword(true);
+      setIsFirstLogin(passwordStatus.firstLogin || false);
+    }
   };
 
   const handleLogout = () => {
@@ -33,6 +42,19 @@ const AdminApp = ({ children }) => {
     localStorage.removeItem('adminData');
     setAdmin(null);
     setIsAuthenticated(false);
+    setMustChangePassword(false);
+    setIsFirstLogin(false);
+  };
+
+  const handlePasswordChanged = () => {
+    setMustChangePassword(false);
+    setIsFirstLogin(false);
+    // Admin-Daten aktualisieren
+    if (admin) {
+      const updatedAdmin = { ...admin, mustChangePassword: false, firstLogin: false };
+      setAdmin(updatedAdmin);
+      localStorage.setItem('adminData', JSON.stringify(updatedAdmin));
+    }
   };
 
   if (loading) {
@@ -50,7 +72,22 @@ const AdminApp = ({ children }) => {
     return <AdminLogin onLogin={handleLogin} />;
   }
 
-  return React.cloneElement(children, { admin, onLogout: handleLogout });
+  return (
+    <>
+      {React.cloneElement(children, { admin, onLogout: handleLogout })}
+      
+      {/* NEU: Passwort-Ändern Modal */}
+      {mustChangePassword && (
+        <ChangePasswordModal
+          isOpen={mustChangePassword}
+          onClose={!isFirstLogin ? () => setMustChangePassword(false) : undefined}
+          onSuccess={handlePasswordChanged}
+          isFirstLogin={isFirstLogin}
+          username={admin?.username}
+        />
+      )}
+    </>
+  );
 };
 
 export default AdminApp;

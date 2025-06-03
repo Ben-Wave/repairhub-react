@@ -1,4 +1,4 @@
-// backend/routes/admin-auth.js - NEUE DATEI erstellen
+// backend/routes/admin-auth.js - ERWEITERT mit mustChangePassword
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -48,7 +48,7 @@ const authenticateAdmin = (req, res, next) => {
   });
 };
 
-// Admin Login Route
+// Admin Login Route - ERWEITERT mit mustChangePassword
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -85,7 +85,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Response mit Admin-Daten und Berechtigungen
+    // Response mit Admin-Daten und Berechtigungen + Passwort-Status
     const responseData = {
       token,
       admin: {
@@ -96,7 +96,10 @@ router.post('/login', async (req, res) => {
         role: admin.role,
         permissions: admin.roleId ? admin.roleId.permissions : null,
         roleName: admin.roleId ? admin.roleId.name : null
-      }
+      },
+      // NEU: Passwort-Änderung erforderlich?
+      mustChangePassword: admin.mustChangePassword || false,
+      firstLogin: admin.firstLogin || false
     };
 
     res.json(responseData);

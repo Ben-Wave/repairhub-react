@@ -23,12 +23,13 @@ const AdminLogin = ({ onLogin }) => {
 
     try {
       const response = await axios.post('/api/admin-auth/login', formData);
-      const { token, admin } = response.data;
+      const { token, admin, mustChangePassword, firstLogin } = response.data;
       
       localStorage.setItem('adminToken', token);
       localStorage.setItem('adminData', JSON.stringify(admin));
       
-      onLogin(admin, token);
+      // NEU: Passwort-Status weitergeben
+      onLogin(admin, token, { mustChangePassword, firstLogin });
     } catch (error) {
       setError(error.response?.data?.error || 'Login fehlgeschlagen');
     } finally {

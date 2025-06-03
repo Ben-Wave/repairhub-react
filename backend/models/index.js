@@ -1,4 +1,4 @@
-// backend/models/index.js - ERWEITERT basierend auf deiner bestehenden Datei
+// backend/models/index.js - ERWEITERT mit Admin Passwort-Feldern
 const mongoose = require('mongoose');
 
 // Device Schema (bestehend, nur erweitert für Reseller-System)
@@ -71,7 +71,7 @@ const syncConfigSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Neue Schemas für Reseller-System
+// Reseller Schema mit Passwort-Feldern
 const resellerSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
@@ -80,7 +80,7 @@ const resellerSchema = new mongoose.Schema({
   company: { type: String },
   phone: { type: String },
   isActive: { type: Boolean, default: true },
-  // NEU: Felder für Passwort-Reset
+  // Felder für Passwort-Reset
   mustChangePassword: { type: Boolean, default: true }, // Muss Passwort bei erstem Login ändern
   firstLogin: { type: Boolean, default: true }, // Ist das der erste Login?
   lastPasswordChange: { type: Date }, // Wann wurde Passwort zuletzt geändert
@@ -106,6 +106,7 @@ const deviceAssignmentSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// ERWEITERT: Admin Schema mit Passwort-Feldern
 const adminSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
@@ -116,11 +117,15 @@ const adminSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   lastLogin: { type: Date },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+  // NEU: Passwort-Management Felder
+  mustChangePassword: { type: Boolean, default: false }, // Muss Passwort bei erstem Login ändern
+  firstLogin: { type: Boolean, default: false }, // Ist das der erste Login?
+  lastPasswordChange: { type: Date }, // Wann wurde Passwort zuletzt geändert
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// ERWEITERT: UserRole Schema mit tools.priceCalculator
+// UserRole Schema mit tools.priceCalculator
 const userRoleSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true }, // z.B. "admin", "manager", "viewer", "calculator_user"
   displayName: { type: String, required: true }, // z.B. "Administrator", "Manager", "Nur Ansicht", "Preisrechner Benutzer"
@@ -153,12 +158,13 @@ const userRoleSchema = new mongoose.Schema({
       settings: { type: Boolean, default: false },
       statistics: { type: Boolean, default: false }
     },
-    // NEU: Tools-Berechtigung
+    // Tools-Berechtigung
     tools: {
       priceCalculator: { type: Boolean, default: false }
     }
   },
   isActive: { type: Boolean, default: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
