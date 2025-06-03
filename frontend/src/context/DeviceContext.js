@@ -1,4 +1,4 @@
-// frontend/src/context/DeviceContext.js - KORRIGIERT für Admin-Token
+// frontend/src/context/DeviceContext.js - KORRIGIERT für Admin-Token + getStats
 import React, { createContext, useReducer } from 'react';
 import axios from 'axios';
 import DeviceReducer from './DeviceReducer';
@@ -7,7 +7,8 @@ const initialState = {
   devices: [],
   currentDevice: null,
   loading: false,
-  error: null
+  error: null,
+  stats: null
 };
 
 export const DeviceContext = createContext(initialState);
@@ -115,6 +116,34 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
+  // Get stats - HINZUGEFÜGT für Dashboard
+  const getStats = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Kein Authentifizierungs-Token gefunden');
+      }
+
+      const res = await axios.get('/api/stats', {
+        headers: getAuthHeaders()
+      });
+      
+      dispatch({
+        type: 'GET_STATS',
+        payload: res.data
+      });
+      
+      return res.data;
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: error.response?.data?.error || 'Fehler beim Laden der Statistiken'
+      });
+      throw error;
+    }
+  };
+
   // Add device
   const addDevice = async (deviceData) => {
     try {
@@ -213,8 +242,10 @@ export const DeviceProvider = ({ children }) => {
         currentDevice: state.currentDevice,
         loading: state.loading,
         error: state.error,
+        stats: state.stats,
         getDevices,
         getDevice,
+        getStats, // HINZUGEFÜGT
         addDevice,
         updateDevice,
         deleteDevice,
