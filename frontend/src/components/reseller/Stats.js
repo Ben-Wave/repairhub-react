@@ -5,14 +5,14 @@ const Stats = ({ stats }) => {
     assigned = 0,
     received = 0,
     sold = 0,
-    returned = 0,
+    // returned wird nicht mehr verwendet/angezeigt
     totalRevenue = 0
   } = stats;
 
   // Debug-Ausgabe in der Konsole
-  console.log('Stats Komponente erhalten:', stats);
+  console.log('Stats Komponente erhalten (bereinigt):', stats);
 
-  const total = assigned + received + sold + returned;
+  const total = assigned + received + sold; // returned nicht mehr enthalten
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -104,10 +104,18 @@ const Stats = ({ stats }) => {
         </div>
       </div>
 
+      {/* Optional: Hinweis für Reseller über versteckte entzogene Geräte */}
+      <div className="col-span-full bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <p className="text-sm text-blue-700">
+          <span className="font-medium">ℹ️ Hinweis:</span> Diese Statistiken zeigen nur Ihre aktiven Gerätezuweisungen. 
+          Von Administratoren entzogene Geräte werden nicht angezeigt.
+        </p>
+      </div>
+
       {/* Debug-Info (nur in Development) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="col-span-full bg-gray-100 p-3 rounded text-xs">
-          <strong>Debug:</strong> {JSON.stringify(stats)}
+          <strong>Debug (bereinigt):</strong> {JSON.stringify(stats)}
         </div>
       )}
     </div>

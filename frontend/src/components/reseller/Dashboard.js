@@ -148,7 +148,7 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
         {/* Stats */}
         <Stats stats={stats} />
 
-        {/* Quick Actions */}
+        {/* Quick Actions - BEREINIGT ohne entzogene Geräte */}
         <div className="bg-white shadow rounded-lg p-6 mb-8">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Schnellaktionen</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -190,6 +190,7 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
               <span className="text-blue-600">Erhalten: {devices.filter(d => d.status === 'received').length}</span>
               <span>•</span>
               <span className="text-green-600">Verkauft: {devices.filter(d => d.status === 'sold').length}</span>
+              {/* Entzogene Geräte werden nicht mehr gezählt oder angezeigt */}
             </div>
           </div>
 

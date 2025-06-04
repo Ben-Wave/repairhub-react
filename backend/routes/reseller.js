@@ -49,11 +49,13 @@ const enrichPartsWithDetails = async (deviceParts) => {
   }
 };
 
-// Alle dem Reseller zugewiesenen Geräte abrufen
+// Alle dem Reseller zugewiesenen Geräte abrufen - BEREINIGT ohne entzogene Geräte
 router.get('/devices', authenticateToken, async (req, res) => {
   try {
     const assignments = await DeviceAssignment.find({ 
-      resellerId: req.user.id 
+      resellerId: req.user.id,
+      // WICHTIG: Entzogene Geräte werden ausgeblendet
+      status: { $ne: 'returned' }
     })
     .populate({
       path: 'deviceId',
@@ -198,14 +200,20 @@ router.patch('/devices/:assignmentId/confirm-sale', authenticateToken, async (re
   }
 });
 
-// Statistiken für Reseller
+// Statistiken für Reseller - BEREINIGT um entzogene Geräte auszublenden
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     // Verwende mongoose.Types.ObjectId für korrekte Abfrage
     const resellerId = new mongoose.Types.ObjectId(req.user.id);
     
     const stats = await DeviceAssignment.aggregate([
-      { $match: { resellerId: resellerId } },
+      { 
+        $match: { 
+          resellerId: resellerId,
+          // WICHTIG: Schließe entzogene Geräte aus den Statistiken aus
+          status: { $ne: 'returned' }
+        } 
+      },
       {
         $group: {
           _id: '$status',
@@ -223,19 +231,20 @@ router.get('/stats', authenticateToken, async (req, res) => {
       }
     ]);
 
-    // Initialisiere alle Status-Werte
+    // Initialisiere alle Status-Werte (ohne 'returned')
     const formattedStats = {
       assigned: 0,
       received: 0,
       sold: 0,
-      returned: 0,
+      // returned: 0, // Entfernt - wird nicht mehr angezeigt
       totalSales: 0,
       totalRevenue: 0
     };
-// Debug-Logging
+
+    // Debug-Logging
     console.log('Reseller Stats for user:', req.user.id);
-    console.log('Raw stats:', stats);
-    console.log('Formatted stats:', formattedStats);
+    console.log('Raw stats (excluding returned):', stats);
+    
     // Fülle die tatsächlichen Werte
     stats.forEach(stat => {
       if (formattedStats.hasOwnProperty(stat._id)) {
@@ -247,8 +256,11 @@ router.get('/stats', authenticateToken, async (req, res) => {
       }
     });
 
+    console.log('Formatted stats (excluding returned):', formattedStats);
+
     res.json(formattedStats);
   } catch (error) {
+    console.error('Fehler beim Abrufen der Statistiken:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Statistiken' });
   }
 });
