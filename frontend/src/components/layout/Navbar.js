@@ -1,14 +1,50 @@
-// frontend/src/components/layout/Navbar.js
-import React from 'react';
+// frontend/src/components/layout/Navbar.js - DROPDOWN POSITION KORRIGIERT
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import axios from 'axios';
 
 const Navbar = ({ admin, onLogout }) => {
   const location = useLocation();
+  const [userPermissions, setUserPermissions] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPermissions = async () => {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get('/api/auth/user-info', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.data.type === 'admin') {
+          setUserPermissions(response.data.user.permissions);
+          setUserRole(response.data.user.role);
+        }
+      } catch (error) {
+        console.error('Fehler beim Laden der Berechtigungen:', error);
+      }
+      setIsLoading(false);
+    };
+
+    loadPermissions();
+  }, []);
 
   const handleLogout = () => {
     if (onLogout) {
       onLogout();
     }
+  };
+
+  const hasPermission = (category, permission) => {
+    if (userRole === 'super_admin') return true;
+    if (!userPermissions) return false;
+    return userPermissions[category] && userPermissions[category][permission];
   };
 
   const isActive = (path) => {
@@ -17,6 +53,41 @@ const Navbar = ({ admin, onLogout }) => {
     }
     return path !== '/' && location.pathname.startsWith(path);
   };
+
+  // Wenn noch lädt, zeige einfache Navbar
+  if (isLoading) {
+    return (
+      <nav className="bg-blue-900 shadow-lg">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl">🔧</span>
+              <Link to="/" className="text-white text-xl font-bold hover:text-blue-200 transition duration-200">
+                Repairhub
+              </Link>
+            </div>
+            <div className="text-white">Lädt...</div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // Tools Dropdown Items basierend auf Berechtigungen
+  const toolsItems = [
+    ...(hasPermission('tools', 'priceCalculator') ? [
+      { path: '/calculator', label: 'Preisrechner' }
+    ] : []),
+    ...(hasPermission('parts', 'view') ? [
+      { path: '/foneday-search', label: 'Foneday Suche' }
+    ] : []),
+    ...(hasPermission('system', 'settings') ? [
+      { path: '/sync-settings', label: 'Sync Einstellungen' }
+    ] : [])
+  ];
+
+  const hasToolsAccess = toolsItems.length > 0;
+  const isToolsActive = isActive('/calculator') || isActive('/foneday-search') || isActive('/sync-settings');
 
   return (
     <nav className="bg-blue-900 shadow-lg">
@@ -32,77 +103,109 @@ const Navbar = ({ admin, onLogout }) => {
           
           {/* Main Navigation */}
           <div className="hidden md:flex space-x-6">
-            <Link 
-              to="/" 
-              className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                isActive('/') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-              }`}
-            >
-              Dashboard
-            </Link>
+            {/* Dashboard - nur wenn Statistiken-Berechtigung vorhanden */}
+            {hasPermission('system', 'statistics') && (
+              <Link 
+                to="/" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                Dashboard
+              </Link>
+            )}
             
-            <Link 
-              to="/devices" 
-              className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                isActive('/devices') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-              }`}
-            >
-              Geräte
-            </Link>
+            {/* Geräte - nur wenn Berechtigung vorhanden */}
+            {hasPermission('devices', 'view') && (
+              <Link 
+                to="/devices" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/devices') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                Geräte
+              </Link>
+            )}
             
-            <Link 
-              to="/parts" 
-              className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                isActive('/parts') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-              }`}
-            >
-              Ersatzteile
-            </Link>
+            {/* Ersatzteile - nur wenn Berechtigung vorhanden */}
+            {hasPermission('parts', 'view') && (
+              <Link 
+                to="/parts" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/parts') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                Ersatzteile
+              </Link>
+            )}
             
-            <Link 
-              to="/admin/resellers" 
-              className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                isActive('/admin/resellers') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-              }`}
-            >
-              Reseller
-            </Link>
+            {/* Reseller - nur wenn Berechtigung vorhanden */}
+            {hasPermission('resellers', 'view') && (
+              <Link 
+                to="/admin/resellers" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/admin/resellers') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                Reseller
+              </Link>
+            )}
 
-            {/* Dropdown für Tools */}
-            <div className="relative group">
-              <button className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
-                isActive('/calculator') || isActive('/foneday-search') || isActive('/sync-settings') 
-                  ? 'bg-blue-800 border-b-2 border-blue-300' : ''
-              }`}>
-                Tools
-                <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </button>
-              
-              <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                <div className="py-1">
+            {/* Benutzerverwaltung - nur wenn Berechtigung vorhanden */}
+            {hasPermission('system', 'userManagement') && (
+              <Link 
+                to="/admin/users" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/admin/users') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                Benutzer
+              </Link>
+            )}
+
+            {/* Tools Dropdown/Direct Link - KORRIGIERT für bessere Darstellung */}
+            {hasToolsAccess && (
+              <>
+                {toolsItems.length === 1 ? (
+                  // Nur ein Tool - direkter Link ohne Dropdown
                   <Link 
-                    to="/calculator" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                    to={toolsItems[0].path}
+                    className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                      isActive(toolsItems[0].path) ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                    }`}
                   >
-                    Preisrechner
+                    {toolsItems[0].label}
                   </Link>
-                  <Link 
-                    to="/foneday-search" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    Foneday Suche
-                  </Link>
-                  <Link 
-                    to="/sync-settings" 
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    Sync Einstellungen
-                  </Link>
-                </div>
-              </div>
-            </div>
+                ) : (
+                  // Mehrere Tools - Dropdown mit KORRIGIERTER Positionierung
+                  <div className="relative group">
+                    <button className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                      isToolsActive ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                    }`}>
+                      Tools
+                      <svg className="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </button>
+                    
+                    {/* KORRIGIERT: right-0 statt left-0 für bessere Positionierung */}
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                      <div className="py-1">
+                        {toolsItems.map((item) => (
+                          <Link 
+                            key={item.path}
+                            to={item.path} 
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Mobile Navigation Button */}
@@ -127,7 +230,12 @@ const Navbar = ({ admin, onLogout }) => {
               <div className="text-white text-sm">
                 <span className="hidden lg:inline">Willkommen, </span>
                 <span className="font-medium">{admin.name}</span>
-                <span className="hidden lg:inline text-blue-300 ml-1">({admin.role})</span>
+                <span className="hidden lg:inline text-blue-300 ml-1">
+                  ({userRole === 'super_admin' ? 'Super Admin' : 
+                    userRole === 'admin' ? 'Administrator' :
+                    userRole === 'manager' ? 'Manager' :
+                    userRole || admin.role})
+                </span>
               </div>
             )}
             <button
@@ -145,68 +253,87 @@ const Navbar = ({ admin, onLogout }) => {
         {/* Mobile Menu */}
         <div id="mobile-menu" className="md:hidden hidden pb-4">
           <div className="space-y-2">
-            <Link 
-              to="/" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Dashboard
-            </Link>
-            <Link 
-              to="/devices" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/devices') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Geräte
-            </Link>
-            <Link 
-              to="/parts" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/parts') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Ersatzteile
-            </Link>
-            <Link 
-              to="/admin/resellers" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/admin/resellers') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Reseller
-            </Link>
-            <Link 
-              to="/calculator" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/calculator') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Preisrechner
-            </Link>
-            <Link 
-              to="/foneday-search" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/foneday-search') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Foneday Suche
-            </Link>
-            <Link 
-              to="/sync-settings" 
-              className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
-                isActive('/sync-settings') ? 'bg-blue-800' : ''
-              }`}
-            >
-              Sync Einstellungen
-            </Link>
+            {/* Dashboard - Mobile */}
+            {hasPermission('system', 'statistics') && (
+              <Link 
+                to="/" 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/') ? 'bg-blue-800' : ''
+                }`}
+              >
+                Dashboard
+              </Link>
+            )}
+
+            {/* Geräte - Mobile */}
+            {hasPermission('devices', 'view') && (
+              <Link 
+                to="/devices" 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/devices') ? 'bg-blue-800' : ''
+                }`}
+              >
+                Geräte
+              </Link>
+            )}
+
+            {/* Ersatzteile - Mobile */}
+            {hasPermission('parts', 'view') && (
+              <Link 
+                to="/parts" 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/parts') ? 'bg-blue-800' : ''
+                }`}
+              >
+                Ersatzteile
+              </Link>
+            )}
+
+            {/* Reseller - Mobile */}
+            {hasPermission('resellers', 'view') && (
+              <Link 
+                to="/admin/resellers" 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/admin/resellers') ? 'bg-blue-800' : ''
+                }`}
+              >
+                Reseller
+              </Link>
+            )}
+            
+            {/* Benutzerverwaltung - Mobile */}
+            {hasPermission('system', 'userManagement') && (
+              <Link 
+                to="/admin/users" 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/admin/users') ? 'bg-blue-800' : ''
+                }`}
+              >
+                Benutzerverwaltung
+              </Link>
+            )}
+            
+            {/* Tools - Mobile (alle einzeln) */}
+            {toolsItems.map((item) => (
+              <Link 
+                key={item.path}
+                to={item.path} 
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive(item.path) ? 'bg-blue-800' : ''
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
             
             {/* Mobile Admin Info & Logout */}
             <div className="border-t border-blue-700 pt-4 mt-4">
               {admin && (
                 <div className="text-blue-200 text-sm px-3 py-2">
-                  {admin.name} ({admin.role})
+                  {admin.name} ({userRole === 'super_admin' ? 'Super Admin' : 
+                               userRole === 'admin' ? 'Administrator' :
+                               userRole === 'manager' ? 'Manager' :
+                               userRole || admin.role})
                 </div>
               )}
               <button
@@ -219,6 +346,18 @@ const Navbar = ({ admin, onLogout }) => {
           </div>
         </div>
       </div>
+
+      {/* Role Info Banner für Calculator-Only Users */}
+      {userPermissions && 
+       userPermissions.tools && 
+       userPermissions.tools.priceCalculator &&
+       !hasPermission('devices', 'view') &&
+       !hasPermission('parts', 'create') &&
+       !hasPermission('system', 'userManagement') && (
+        <div className="bg-blue-800 px-4 py-2 text-center text-sm">
+          🧮 Sie haben Zugriff auf den Preisrechner{hasPermission('parts', 'view') ? ' und Ersatzteile-Ansicht' : ''}
+        </div>
+      )}
     </nav>
   );
 };

@@ -1,4 +1,4 @@
-// DeviceReducer.js
+// DeviceReducer.js - KORRIGIERT
 const deviceReducer = (state, action) => {
   switch (action.type) {
     case 'GET_DEVICES':
@@ -11,7 +11,7 @@ const deviceReducer = (state, action) => {
     case 'GET_DEVICE':
       return {
         ...state,
-        device: action.payload,
+        currentDevice: action.payload, // KORRIGIERT: currentDevice statt device
         loading: false,
         error: null
       };
@@ -28,7 +28,7 @@ const deviceReducer = (state, action) => {
         devices: state.devices.map(device =>
           device._id === action.payload._id ? action.payload : device
         ),
-        device: action.payload,
+        currentDevice: action.payload, // KORRIGIERT: currentDevice statt device
         loading: false,
         error: null
       };
@@ -36,6 +36,7 @@ const deviceReducer = (state, action) => {
       return {
         ...state,
         devices: state.devices.filter(device => device._id !== action.payload),
+        currentDevice: null, // HINZUGEFÜGT: currentDevice auf null setzen
         loading: false,
         error: null
       };

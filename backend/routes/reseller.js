@@ -1,9 +1,53 @@
 // backend/routes/reseller.js
 const express = require('express');
 const mongoose = require('mongoose');
-const { DeviceAssignment, Device } = require('../models');
+const { DeviceAssignment, Device, Part } = require('../models'); // Part hinzugefügt
 const { authenticateToken } = require('./auth');
 const router = express.Router();
+
+// Hilfsfunktion um Part-Details zu laden
+const enrichPartsWithDetails = async (deviceParts) => {
+  if (!deviceParts || !deviceParts.length) return [];
+  
+  try {
+    // Alle Part-Nummern sammeln
+    const partNumbers = deviceParts.map(part => part.partNumber);
+    
+    // Part-Details aus der Parts-Collection laden
+    const partDetails = await Part.find({
+      partNumber: { $in: partNumbers }
+    }).select('partNumber description category forModel');
+    
+    // Create a map for quick lookup
+    const partDetailsMap = {};
+    partDetails.forEach(part => {
+      partDetailsMap[part.partNumber] = part;
+    });
+    
+    // Enriche die device parts mit den Details
+    return deviceParts.map(devicePart => {
+      const details = partDetailsMap[devicePart.partNumber];
+      return {
+        partNumber: devicePart.partNumber,
+        price: devicePart.price,
+        // Zusätzliche Details aus der Parts-Collection
+        description: details?.description || 'Unbekannt',
+        category: details?.category || 'Unbekannt',
+        forModel: details?.forModel || 'Unbekannt'
+      };
+    });
+  } catch (error) {
+    console.error('Fehler beim Laden der Part-Details:', error);
+    // Fallback: Originale Parts zurückgeben ohne Details
+    return deviceParts.map(part => ({
+      partNumber: part.partNumber,
+      price: part.price,
+      description: 'Unbekannt',
+      category: 'Unbekannt',
+      forModel: 'Unbekannt'
+    }));
+  }
+};
 
 // Alle dem Reseller zugewiesenen Geräte abrufen
 router.get('/devices', authenticateToken, async (req, res) => {
@@ -17,23 +61,27 @@ router.get('/devices', authenticateToken, async (req, res) => {
     })
     .sort({ assignedAt: -1 });
 
-    const devicesWithDetails = assignments.map(assignment => ({
-      assignmentId: assignment._id,
-      device: assignment.deviceId,
-      minimumPrice: assignment.minimumPrice,
-      status: assignment.status,
-      assignedAt: assignment.assignedAt,
-      receivedAt: assignment.receivedAt,
-      soldAt: assignment.soldAt,
-      actualSalePrice: assignment.actualSalePrice,
-      notes: assignment.notes,
-      // Berechnete Felder
-      totalPartsCost: assignment.deviceId.parts.reduce((sum, part) => sum + part.price, 0),
-      repairDetails: assignment.deviceId.parts.map(part => ({
-        partNumber: part.partNumber,
-        price: part.price
-      }))
-    }));
+    // Für jedes Gerät die Part-Details anreichern
+    const devicesWithDetails = await Promise.all(
+      assignments.map(async assignment => {
+        const enrichedParts = await enrichPartsWithDetails(assignment.deviceId.parts);
+        
+        return {
+          assignmentId: assignment._id,
+          device: assignment.deviceId,
+          minimumPrice: assignment.minimumPrice,
+          status: assignment.status,
+          assignedAt: assignment.assignedAt,
+          receivedAt: assignment.receivedAt,
+          soldAt: assignment.soldAt,
+          actualSalePrice: assignment.actualSalePrice,
+          notes: assignment.notes,
+          // Berechnete Felder
+          totalPartsCost: enrichedParts.reduce((sum, part) => sum + part.price, 0),
+          repairDetails: enrichedParts // Jetzt mit Kategorie-Informationen
+        };
+      })
+    );
 
     res.json(devicesWithDetails);
   } catch (error) {
@@ -54,6 +102,11 @@ router.get('/devices/:assignmentId', authenticateToken, async (req, res) => {
 
     if (!assignment) {
       return res.status(404).json({ error: 'Gerätezuweisung nicht gefunden' });
+    }
+
+    // Part-Details für das einzelne Gerät anreichern
+    if (assignment.deviceId && assignment.deviceId.parts) {
+      assignment.deviceId.parts = await enrichPartsWithDetails(assignment.deviceId.parts);
     }
 
     res.json(assignment);

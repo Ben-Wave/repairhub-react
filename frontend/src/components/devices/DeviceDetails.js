@@ -10,7 +10,16 @@ const DeviceDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const { device, loading, error, getDevice, updateDevice, deleteDevice, getStats } = useContext(DeviceContext);
+  // KRITISCHER FIX: Verwende currentDevice statt device und entferne getStats
+  const { 
+    currentDevice: device, 
+    loading, 
+    error, 
+    getDevice, 
+    updateDevice, 
+    deleteDevice
+  } = useContext(DeviceContext);
+  
   const { parts, getParts } = useContext(PartsContext);
   
   const [alert, setAlert] = useState(null);
@@ -18,7 +27,7 @@ const DeviceDetails = () => {
   const [purchasePrice, setPurchasePrice] = useState(0);
   const [damageDescription, setDamageDescription] = useState('');
   const [desiredProfit, setDesiredProfit] = useState(0);
-  const [filterType, setFilterType] = useState('compatible'); // 'compatible', 'all'
+  const [filterType, setFilterType] = useState('compatible');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
@@ -48,19 +57,21 @@ const DeviceDetails = () => {
     return modelMatch ? modelMatch[1] : '';
   };
   
+  // KRITISCHER FIX: Entferne getDevice aus Dependencies um Endlosschleife zu vermeiden
   useEffect(() => {
-    if (typeof getDevice === 'function') {
+    if (typeof getDevice === 'function' && id) {
       getDevice(id);
     }
-    // eslint-disable-next-line
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // NUR id als Dependency!
   
+  // KRITISCHER FIX: Entferne getParts aus Dependencies
   useEffect(() => {
     if (typeof getParts === 'function') {
-      getParts(); // Lade alle Ersatzteile
+      getParts();
     }
-    // eslint-disable-next-line
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Leere Dependencies!
   
   useEffect(() => {
     if (device) {
@@ -118,9 +129,6 @@ const DeviceDetails = () => {
         setIsSalesModalOpen(true);
       } else {
         await updateDevice(id, { status: newStatus });
-        if (typeof getStats === 'function') {
-          getStats(); // Aktualisiere die Statistiken
-        }
         setAlert({ type: 'success', message: 'Status erfolgreich aktualisiert' });
       }
     } catch (err) {
@@ -136,11 +144,6 @@ const DeviceDetails = () => {
         actualSellingPrice,
         soldDate: now
       });
-      
-      // Statistiken aktualisieren
-      if (typeof getStats === 'function') {
-        getStats();
-      }
       
       setAlert({ type: 'success', message: 'Gerät als verkauft markiert und Verkaufspreis gespeichert' });
     } catch (err) {

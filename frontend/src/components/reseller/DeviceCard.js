@@ -32,6 +32,24 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
     }
   };
 
+  // Hilfsfunktion um Kategorie-Farben zu bestimmen
+  const getCategoryColor = (category) => {
+    switch (category?.toLowerCase()) {
+      case 'display': return 'bg-blue-100 text-blue-800';
+      case 'akku': 
+      case 'battery': return 'bg-green-100 text-green-800';
+      case 'kamera': 
+      case 'camera': return 'bg-purple-100 text-purple-800';
+      case 'gehäuse': 
+      case 'housing': return 'bg-gray-100 text-gray-800';
+      case 'platine': 
+      case 'board': return 'bg-red-100 text-red-800';
+      case 'lautsprecher': 
+      case 'speaker': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-indigo-100 text-indigo-800';
+    }
+  };
+
   const confirmReceipt = async () => {
     setLoading(true);
     try {
@@ -158,16 +176,50 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
             {repairDetails.length > 0 && (
               <div>
                 <h5 className="font-medium text-gray-900 mb-2">Verwendete Teile:</h5>
-                <ul className="list-disc list-inside space-y-1">
+                <div className="space-y-2">
                   {repairDetails.map((part, index) => (
-                    <li key={index} className="text-sm text-gray-600">
-                      {part.partNumber} - {part.price}€
-                    </li>
+                    <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="font-medium text-gray-900">
+                              {part.partNumber}
+                            </span>
+                            {/* Kategorie-Badge */}
+                            {part.category && part.category !== 'Unbekannt' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(part.category)}`}>
+                                {part.category}
+                              </span>
+                            )}
+                          </div>
+                          {/* Beschreibung */}
+                          {part.description && part.description !== 'Unbekannt' && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              {part.description}
+                            </p>
+                          )}
+                          {/* Kompatibilität */}
+                          {part.forModel && part.forModel !== 'Unbekannt' && (
+                            <p className="text-xs text-gray-500">
+                              Für: {part.forModel}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="font-semibold text-green-600">
+                            {part.price}€
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </ul>
-                <p className="text-sm font-medium text-gray-900 mt-2">
-                  Gesamte Reparaturkosten: {totalPartsCost}€
-                </p>
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-900 flex justify-between">
+                    <span>Gesamte Reparaturkosten:</span>
+                    <span className="text-green-600">{totalPartsCost}€</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
