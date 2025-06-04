@@ -42,21 +42,41 @@ const PriceCalculator = () => {
     return '';
   };
 
-  // NEU: Qualitäts-Extraktion für Back Cover
+  // NEU: Erweiterte Qualitäts-Extraktion (für Battery und Back Cover)
   const extractQuality = (description) => {
     if (!description) return 'Standard';
     
     const desc = description.toLowerCase();
-    if (desc.includes('refurbished')) return 'Refurbished';
+    
+    // Service Pack Varianten
+    if (desc.includes('service pack (used message)')) return 'Service Pack (Used Message)';
+    if (desc.includes('service pack')) return 'Service Pack';
+    
+    // Pulled Varianten
     if (desc.includes('pulled b')) return 'Pulled B';
     if (desc.includes('pulled')) return 'Pulled';
-    if (desc.includes('new')) return 'New';
+    
+    // Refurbished
+    if (desc.includes('refurbished')) return 'Refurbished';
+    
+    // OEM Varianten
+    if (desc.includes('oem-equivalent (diagnosable)')) return 'OEM-Equivalent (Diagnosable)';
+    if (desc.includes('oem-equivalent')) return 'OEM-Equivalent';
     if (desc.includes('oem')) return 'OEM';
+    
+    // High Capacity
+    if (desc.includes('high capacity')) return 'High Capacity';
+    
+    // New
+    if (desc.includes('new')) return 'New';
+    
+    // Without BMS/IC
+    if (desc.includes('without bms/ic')) return 'Without BMS/IC';
     
     return 'Standard';
   };
 
-  // NEU: Farb-Extraktion für Back Cover
+  // NEU: Farb-Extraktion für Back Cover (wieder hinzugefügt)
   const extractColor = (description) => {
     if (!description) return 'Unknown';
     
@@ -73,7 +93,36 @@ const PriceCalculator = () => {
     return 'Unknown';
   };
 
-  // ERWEITERT: Verbesserte Modell-Kompatibilität (KORRIGIERT für Battery)
+  // NEU: Erweiterte Beschreibungs-Extraktion für Battery
+  const extractBatteryInfo = (description) => {
+    if (!description) return 'Unknown';
+    
+    const desc = description.toLowerCase();
+    
+    // Spezielle Battery-Infos extrahieren
+    if (desc.includes('high capacity')) {
+      const capacityMatch = desc.match(/(\d+mah)/);
+      return capacityMatch ? `High Capacity (${capacityMatch[1]})` : 'High Capacity';
+    }
+    
+    if (desc.includes('without bms/ic')) return 'Without BMS/IC';
+    if (desc.includes('diagnosable')) return 'Diagnosable';
+    if (desc.includes('used message')) return 'Used Message';
+    
+    // Für Back Cover: Farbe extrahieren
+    if (desc.includes(' black')) return 'Black';
+    if (desc.includes(' white')) return 'White';
+    if (desc.includes(' red')) return 'Red';
+    if (desc.includes(' blue')) return 'Blue';
+    if (desc.includes(' green')) return 'Green';
+    if (desc.includes(' purple')) return 'Purple';
+    if (desc.includes(' yellow')) return 'Yellow';
+    if (desc.includes(' pink')) return 'Pink';
+    
+    return 'Standard';
+  };
+
+  // ERWEITERT: Verbesserte Modell-Kompatibilität (KORRIGIERT)
   const isModelCompatible = (part, selectedModel) => {
     if (!selectedModel || !part.forModel) return false;
     
@@ -107,7 +156,7 @@ const PriceCalculator = () => {
       }
     }
     
-    // Für alle anderen Teile (Back Cover, Camera, etc.): EXAKTE Modell-Übereinstimmung
+    // Für Back Cover: EXAKTE Modell-Übereinstimmung
     const isBackCover = part.category?.toLowerCase().includes('back cover') || 
                        part.category?.toLowerCase().includes('housing') ||
                        part.category?.toLowerCase().includes('rear housing');
@@ -117,14 +166,14 @@ const PriceCalculator = () => {
       return part.forModel === selectedModel;
     }
     
-    // Basis-Modell Vergleich für andere Teile (Camera, Charging Connector, etc.)
+    // Für ALLE anderen Teile: Basis-Modell Vergleich (wie vorher)
     const selectedBaseModel = getBaseModel(selectedModel);
     const partBaseModel = getBaseModel(part.forModel);
     
     return selectedBaseModel && partBaseModel && 
            selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
   };
-  // NEU: Kategorie-Filter für relevante Teile (KORRIGIERT - Main/Display flex entfernt)
+  // NEU: Kategorie-Filter für relevante Teile (KORRIGIERT - Battery erlaubt)
   const isRelevantCategory = (category) => {
     if (!category) return false;
     
@@ -132,7 +181,7 @@ const PriceCalculator = () => {
     const excludedCategories = [
       'adapter',
       'airpods',
-      'battery reader',
+      'battery reader', // NUR "battery reader", NICHT "battery"!
       'booktypes case',
       'case friendly',
       'desk setups',
@@ -148,7 +197,6 @@ const PriceCalculator = () => {
       'integrated circuit (ic)',
       'keyboards',
       'lightning',
-      // 'main/display flex', // ENTFERNT - das sind Display-Teile!
       'micro-usb',
       'privacy glass',
       'return key',
@@ -162,38 +210,44 @@ const PriceCalculator = () => {
     ];
     
     const categoryLower = category.toLowerCase();
+    
+    // SPEZIAL-BEHANDLUNG: "Battery Reader" ausschließen, aber "Battery" erlauben
+    if (categoryLower === 'battery reader') return false;
+    if (categoryLower === 'battery' || categoryLower.includes('battery (')) return true;
+    
     return !excludedCategories.some(excluded => 
       categoryLower.includes(excluded) || excluded.includes(categoryLower)
     );
   };
 
-  // NEU: Kategorie-Normalisierung (ERWEITERT für Display-Flex)
+  // NEU: Kategorie-Normalisierung (FIXIERT - Battery nicht normalisieren)
   const normalizeCategory = (category) => {
     if (!category) return category;
     
     const categoryLower = category.toLowerCase();
     
+    // NUR für echte Duplikate normalisieren
     // Back Cover Varianten
-    if (categoryLower.includes('back cover') || 
-        categoryLower.includes('rear housing')) {
+    if (categoryLower.includes('rear housing (refurbished)')) {
       return 'Back Cover';
     }
     
-    // Display Varianten (inkl. Main/Display flex)
-    if (categoryLower.includes('display') || 
-        categoryLower.includes('screen') ||
-        categoryLower.includes('main/display flex')) {
+    // Display Varianten (nur für echte Screen-Duplikate)
+    if (categoryLower.includes('screen (refurbished)')) {
       return 'Display';
     }
     
-    // Battery Varianten
-    if (categoryLower.includes('battery')) {
-      return 'Battery';
+    // Main/Display flex zu Display
+    if (categoryLower === 'main/display flex') {
+      return 'Display';
     }
     
-    return category; // Original beibehalten
+    // WICHTIG: Battery-Kategorien NICHT normalisieren!
+    // "Battery" und "Battery (Service Pack)" bleiben getrennt
+    
+    return category; // Original beibehalten für alles andere
   };
-  // NEU: EU-Filter Funktion
+  // NEU: EU-Filter Funktion (ERWEITERT für Display Sensor Flex)
   const isEuPart = (part) => {
     // Prüfe ob es sich um ein Backcover/Housing handelt
     const isBackcover = part.category?.toLowerCase().includes('gehäuse') || 
@@ -202,20 +256,45 @@ const PriceCalculator = () => {
                        part.description?.toLowerCase().includes('rear housing') ||
                        part.description?.toLowerCase().includes('back cover');
     
-    if (!isBackcover) return true; // Andere Teile sind immer OK
-    
-    // Für Backcover: Nur EU-Versionen zulassen
-    const description = part.description?.toLowerCase() || '';
-    const partNumber = part.partNumber?.toLowerCase() || '';
-    
-    // Ausschließen wenn explizit US Version
-    if (description.includes('us version') || 
-        description.includes('(us version)') ||
-        partNumber.includes('us')) {
-      return false;
+    if (isBackcover) {
+      // Für Backcover: Nur EU-Versionen zulassen
+      const description = part.description?.toLowerCase() || '';
+      const partNumber = part.partNumber?.toLowerCase() || '';
+      
+      // Ausschließen wenn explizit US Version
+      if (description.includes('us version') || 
+          description.includes('(us version)') ||
+          partNumber.includes('us')) {
+        return false;
+      }
     }
     
-    return true; // Alles andere (inkl. EU) ist OK
+    // WICHTIG: Display-Filter für Pulled und Refurbished
+    const isDisplay = part.category?.toLowerCase().includes('display') || 
+                     part.category?.toLowerCase().includes('screen') ||
+                     part.description?.toLowerCase().includes('display');
+    
+    if (isDisplay) {
+      const description = part.description?.toLowerCase() || '';
+      
+      // Prüfe ob es Pulled oder Refurbished ist
+      const isPulled = description.includes('pulled');
+      const isRefurbished = description.includes('refurbished');
+      
+      if (isPulled || isRefurbished) {
+        // Für Pulled und Refurbished: MUSS "with Sensor Flex" enthalten
+        const hasSensorFlex = description.includes('with sensor flex') || 
+                             description.includes('sensor flex');
+        
+        if (!hasSensorFlex) {
+          return false; // Ausschließen wenn kein Sensor Flex
+        }
+      }
+      
+      // Andere Display-Typen (OEM, Service Pack, etc.) sind OK
+    }
+    
+    return true; // Alles andere ist OK
   };
 
   // NEU: Mobile Detection
@@ -514,12 +593,13 @@ const PriceCalculator = () => {
                           
                           {expandedCategory === category && (
                             <div className="p-3 bg-gray-50 space-y-2">
-                              {/* SPEZIELLE BEHANDLUNG FÜR BACK COVER UND DISPLAY */}
+                              {/* SPEZIELLE BEHANDLUNG FÜR BACK COVER, DISPLAY UND BATTERY */}
                               {(category.toLowerCase().includes('back cover') || 
                                 category.toLowerCase().includes('gehäuse') || 
                                 category.toLowerCase().includes('housing') ||
                                 category.toLowerCase().includes('display') ||
-                                category.toLowerCase().includes('screen')) ? (
+                                category.toLowerCase().includes('screen') ||
+                                category.toLowerCase().includes('battery')) ? (
                                 // Gruppierung nach Qualität für Back Cover
                                 (() => {
                                   const qualityGroups = {};
