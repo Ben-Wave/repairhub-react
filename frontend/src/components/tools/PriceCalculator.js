@@ -1,4 +1,4 @@
-// frontend/src/components/tools/PriceCalculator.js - KOMPLETT KORRIGIERT
+// frontend/src/components/tools/PriceCalculator.js - MOBILE OPTIMIERT + EU FILTER
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -15,6 +15,13 @@ const PriceCalculator = () => {
   const [selectedPartsByCategory, setSelectedPartsByCategory] = useState({});
   const [desiredProfit, setDesiredProfit] = useState(50);
   const [marketPrice, setMarketPrice] = useState(0);
+  
+  // NEU: Mobile UI State
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState(null);
+
+  // EU-Filter für Backcover (immer aktiv)
+  const onlyEuParts = true;
 
   // KORRIGIERT: getBaseModel Funktion AN DEN ANFANG verschoben
   const getBaseModel = (modelString) => {
@@ -34,6 +41,193 @@ const PriceCalculator = () => {
     
     return '';
   };
+
+  // NEU: Qualitäts-Extraktion für Back Cover
+  const extractQuality = (description) => {
+    if (!description) return 'Standard';
+    
+    const desc = description.toLowerCase();
+    if (desc.includes('refurbished')) return 'Refurbished';
+    if (desc.includes('pulled b')) return 'Pulled B';
+    if (desc.includes('pulled')) return 'Pulled';
+    if (desc.includes('new')) return 'New';
+    if (desc.includes('oem')) return 'OEM';
+    
+    return 'Standard';
+  };
+
+  // NEU: Farb-Extraktion für Back Cover
+  const extractColor = (description) => {
+    if (!description) return 'Unknown';
+    
+    const desc = description.toLowerCase();
+    if (desc.includes(' black')) return 'Black';
+    if (desc.includes(' white')) return 'White';
+    if (desc.includes(' red')) return 'Red';
+    if (desc.includes(' blue')) return 'Blue';
+    if (desc.includes(' green')) return 'Green';
+    if (desc.includes(' purple')) return 'Purple';
+    if (desc.includes(' yellow')) return 'Yellow';
+    if (desc.includes(' pink')) return 'Pink';
+    
+    return 'Unknown';
+  };
+
+  // ERWEITERT: Verbesserte Modell-Kompatibilität (KORRIGIERT für Battery)
+  const isModelCompatible = (part, selectedModel) => {
+    if (!selectedModel || !part.forModel) return false;
+    
+    // Direkte Übereinstimmung zuerst
+    if (part.forModel === selectedModel) return true;
+    
+    // Spezielle Behandlung für iPhone 12/12 Pro Kompatibilität
+    const isDisplayPart = part.category?.toLowerCase().includes('display') || 
+                          part.category?.toLowerCase().includes('screen') ||
+                          part.description?.toLowerCase().includes('display');
+    
+    const isBatteryPart = part.category?.toLowerCase().includes('battery') ||
+                          part.description?.toLowerCase().includes('battery');
+    
+    if (isDisplayPart || isBatteryPart) {
+      if (selectedModel.includes('iPhone 12') && !selectedModel.includes('Pro')) {
+        // iPhone 12 (nicht Pro) kann auch iPhone 12/12 Pro Displays UND Batterien verwenden
+        if (part.forModel.includes('iPhone 12/12 Pro') || 
+            part.forModel.includes('iPhone 12 Pro') ||
+            part.description?.includes('iPhone 12/12 Pro')) {
+          return true;
+        }
+      }
+      
+      if (selectedModel.includes('iPhone 12 Pro') && !selectedModel.includes('Pro Max')) {
+        // iPhone 12 Pro kann auch iPhone 12/12 Pro Displays UND Batterien verwenden
+        if (part.forModel.includes('iPhone 12/12 Pro') ||
+            part.description?.includes('iPhone 12/12 Pro')) {
+          return true;
+        }
+      }
+    }
+    
+    // Für alle anderen Teile (Back Cover, Camera, etc.): EXAKTE Modell-Übereinstimmung
+    const isBackCover = part.category?.toLowerCase().includes('back cover') || 
+                       part.category?.toLowerCase().includes('housing') ||
+                       part.category?.toLowerCase().includes('rear housing');
+    
+    if (isBackCover) {
+      // Für Back Cover: NUR exakte Übereinstimmung
+      return part.forModel === selectedModel;
+    }
+    
+    // Basis-Modell Vergleich für andere Teile (Camera, Charging Connector, etc.)
+    const selectedBaseModel = getBaseModel(selectedModel);
+    const partBaseModel = getBaseModel(part.forModel);
+    
+    return selectedBaseModel && partBaseModel && 
+           selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
+  };
+  // NEU: Kategorie-Filter für relevante Teile (KORRIGIERT - Main/Display flex entfernt)
+  const isRelevantCategory = (category) => {
+    if (!category) return false;
+    
+    // Ausgeschlossene Kategorien (nicht relevant für Reparaturen)
+    const excludedCategories = [
+      'adapter',
+      'airpods',
+      'battery reader',
+      'booktypes case',
+      'case friendly',
+      'desk setups',
+      'earphones',
+      'edge to edge',
+      'face id reader',
+      'fan',
+      'glass installation frame',
+      'hardcase',
+      'hdd sata cable',
+      'headphone/mic',
+      'heating pad',
+      'integrated circuit (ic)',
+      'keyboards',
+      'lightning',
+      // 'main/display flex', // ENTFERNT - das sind Display-Teile!
+      'micro-usb',
+      'privacy glass',
+      'return key',
+      'softcase',
+      'soldering stencil/reballing',
+      'stylus pen',
+      'touchbar',
+      'true tone reader',
+      'usb-c',
+      'uv glass'
+    ];
+    
+    const categoryLower = category.toLowerCase();
+    return !excludedCategories.some(excluded => 
+      categoryLower.includes(excluded) || excluded.includes(categoryLower)
+    );
+  };
+
+  // NEU: Kategorie-Normalisierung (ERWEITERT für Display-Flex)
+  const normalizeCategory = (category) => {
+    if (!category) return category;
+    
+    const categoryLower = category.toLowerCase();
+    
+    // Back Cover Varianten
+    if (categoryLower.includes('back cover') || 
+        categoryLower.includes('rear housing')) {
+      return 'Back Cover';
+    }
+    
+    // Display Varianten (inkl. Main/Display flex)
+    if (categoryLower.includes('display') || 
+        categoryLower.includes('screen') ||
+        categoryLower.includes('main/display flex')) {
+      return 'Display';
+    }
+    
+    // Battery Varianten
+    if (categoryLower.includes('battery')) {
+      return 'Battery';
+    }
+    
+    return category; // Original beibehalten
+  };
+  // NEU: EU-Filter Funktion
+  const isEuPart = (part) => {
+    // Prüfe ob es sich um ein Backcover/Housing handelt
+    const isBackcover = part.category?.toLowerCase().includes('gehäuse') || 
+                       part.category?.toLowerCase().includes('housing') ||
+                       part.description?.toLowerCase().includes('housing') ||
+                       part.description?.toLowerCase().includes('rear housing') ||
+                       part.description?.toLowerCase().includes('back cover');
+    
+    if (!isBackcover) return true; // Andere Teile sind immer OK
+    
+    // Für Backcover: Nur EU-Versionen zulassen
+    const description = part.description?.toLowerCase() || '';
+    const partNumber = part.partNumber?.toLowerCase() || '';
+    
+    // Ausschließen wenn explizit US Version
+    if (description.includes('us version') || 
+        description.includes('(us version)') ||
+        partNumber.includes('us')) {
+      return false;
+    }
+    
+    return true; // Alles andere (inkl. EU) ist OK
+  };
+
+  // NEU: Mobile Detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -93,40 +287,39 @@ const PriceCalculator = () => {
       )].sort()
     : availableModels;
 
-  // Kategorien für das gewählte Modell - KORRIGIERT mit besserer Modell-Erkennung
+  // Kategorien für das gewählte Modell - KORRIGIERT mit Normalisierung
   const availableCategories = parts
     .filter(part => {
       if (!selectedModel) return false;
       
-      // Direkte Übereinstimmung zuerst
-      if (part.forModel === selectedModel) return true;
+      // Kategorie-Filter anwenden (relevante Kategorien)
+      if (!isRelevantCategory(part.category)) return false;
       
-      // Dann Basis-Modell Vergleich
-      const selectedBaseModel = getBaseModel(selectedModel);
-      const partBaseModel = getBaseModel(part.forModel);
+      // EU-Filter anwenden
+      if (!isEuPart(part)) return false;
       
-      return selectedBaseModel && partBaseModel && 
-             selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
+      // Verbesserte Modell-Kompatibilität
+      return isModelCompatible(part, selectedModel);
     })
-    .map(part => part.category)
+    .map(part => normalizeCategory(part.category)) // Normalisiere Kategorien
     .filter((category, idx, arr) => arr.indexOf(category) === idx)
     .sort();
 
-  // Teile pro Kategorie für das gewählte Modell - KORRIGIERT
+  // Teile pro Kategorie für das gewählte Modell - KORRIGIERT mit Normalisierung
   const partsByCategory = {};
-  availableCategories.forEach(category => {
-    partsByCategory[category] = parts.filter(part => {
-      if (part.category !== category) return false;
+  availableCategories.forEach(normalizedCategory => {
+    partsByCategory[normalizedCategory] = parts.filter(part => {
+      // Kategorie-Filter anwenden
+      if (!isRelevantCategory(part.category)) return false;
       
-      // Direkte Übereinstimmung zuerst
-      if (part.forModel === selectedModel) return true;
+      // EU-Filter anwenden
+      if (!isEuPart(part)) return false;
       
-      // Dann Basis-Modell Vergleich
-      const selectedBaseModel = getBaseModel(selectedModel);
-      const partBaseModel = getBaseModel(part.forModel);
+      // Verbesserte Modell-Kompatibilität
+      if (!isModelCompatible(part, selectedModel)) return false;
       
-      return selectedBaseModel && partBaseModel && 
-             selectedBaseModel.toLowerCase() === partBaseModel.toLowerCase();
+      // Prüfe ob die normalisierte Kategorie übereinstimmt
+      return normalizeCategory(part.category) === normalizedCategory;
     });
   });
 
@@ -134,6 +327,7 @@ const PriceCalculator = () => {
   const handleModelChange = (e) => {
     setSelectedModel(e.target.value);
     setSelectedPartsByCategory({});
+    setExpandedCategory(null); // Reset mobile expansion
   };
 
   // Handler für Auswahl eines Teils in einer Kategorie
@@ -148,6 +342,11 @@ const PriceCalculator = () => {
         return { ...prev, [category]: [...prevSelected, partId] };
       }
     });
+  };
+
+  // NEU: Mobile Category Toggle
+  const toggleCategory = (category) => {
+    setExpandedCategory(expandedCategory === category ? null : category);
   };
 
   // Gesamtkosten der gewählten Teile berechnen
@@ -206,11 +405,11 @@ const PriceCalculator = () => {
   const similarDevices = getSimilarDevicePrices();
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-blue-900 mb-6">🧮 Einkaufspreisrechner</h2>
+    <div className="bg-white rounded-lg shadow-md p-3 md:p-6">
+      <h2 className="text-xl md:text-2xl font-bold text-blue-900 mb-4 md:mb-6">🧮 Einkaufspreisrechner</h2>
 
       {alert && (
-        <div className={`p-4 rounded-md mb-6 ${alert.type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' : 'bg-green-100 border border-green-400 text-green-700'}`}>
+        <div className={`p-3 md:p-4 rounded-md mb-4 md:mb-6 ${alert.type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' : 'bg-green-100 border border-green-400 text-green-700'}`}>
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm">{alert.message}</p>
@@ -222,12 +421,14 @@ const PriceCalculator = () => {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-8">
+      {/* Entfernt: EU-Filter Toggle - ist jetzt immer aktiv */}
+
+      <div className={`grid gap-6 md:gap-8 ${isMobile ? 'grid-cols-1' : 'lg:grid-cols-2'}`}>
         <div>
-          <h3 className="text-xl font-semibold mb-4">📱 Gerätekonfiguration</h3>
+          <h3 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">📱 Gerätekonfiguration</h3>
 
           <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">
+            <label className="block text-gray-700 font-medium mb-2 text-sm md:text-base">
               Hersteller auswählen
             </label>
             <div className="relative">
@@ -237,8 +438,9 @@ const PriceCalculator = () => {
                   setSelectedManufacturer(e.target.value);
                   setSelectedModel('');
                   setSelectedPartsByCategory({});
+                  setExpandedCategory(null);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10"
+                className="w-full px-3 py-2 md:py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base relative z-10"
               >
                 <option value="">Alle</option>
                 {availableManufacturers.map(manufacturer => (
@@ -249,33 +451,27 @@ const PriceCalculator = () => {
           </div>
 
           <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">
+            <label className="block text-gray-700 font-medium mb-2 text-sm md:text-base">
               Modell auswählen
             </label>
             <div className="relative">
               <select
                 value={selectedModel}
                 onChange={handleModelChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 relative z-10 max-w-full"
-                style={{
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
+                className="w-full px-3 py-2 md:py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base relative z-10"
               >
                 <option value="">Bitte wählen...</option>
                 {filteredModels
-                  .filter(model => model.length < 50) // Filtere zu lange Modell-Namen aus
-                  .slice(0, 100) // Limitiere auf erste 100 Modelle
+                  .filter(model => model.length < 50)
+                  .slice(0, 100)
                   .map(model => (
                   <option key={model} value={model} title={model}>
-                    {model.length > 40 ? model.substring(0, 40) + '...' : model}
+                    {isMobile && model.length > 25 ? model.substring(0, 25) + '...' : 
+                     !isMobile && model.length > 40 ? model.substring(0, 40) + '...' : model}
                   </option>
                 ))}
               </select>
             </div>
-            {/* Debug Info */}
             <p className="text-xs text-gray-500 mt-1">
               {filteredModels.length} Modelle verfügbar
             </p>
@@ -284,56 +480,220 @@ const PriceCalculator = () => {
           {selectedModel && (
             <>
               <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">
+                <label className="block text-gray-700 font-medium mb-2 text-sm md:text-base">
                   Defekte Teile auswählen
                 </label>
-                {/* DROPDOWN-FIX: Container ohne max-height für bessere Darstellung */}
-                <div className="border rounded p-4 bg-gray-50 relative">
-                  <div className="max-h-80 overflow-y-auto">
+                
+                {/* MOBILE: Accordion Style */}
+                {isMobile ? (
+                  <div className="border rounded bg-gray-50">
                     {availableCategories.length === 0 ? (
-                      <p className="text-gray-500">Keine Ersatzteile für dieses Modell verfügbar</p>
+                      <p className="text-gray-500 p-4 text-sm">Keine Ersatzteile für dieses Modell verfügbar</p>
                     ) : (
                       availableCategories.map(category => (
-                        <div key={category} className="mb-4 last:mb-0">
-                          <div className="font-semibold mb-3 text-blue-800 border-b border-blue-200 pb-1">
-                            {category}
-                            <span className="ml-2 text-sm font-normal text-gray-600">
-                              ({partsByCategory[category]?.length || 0} Teile)
+                        <div key={category} className="border-b last:border-b-0">
+                          <button
+                            onClick={() => toggleCategory(category)}
+                            className="w-full p-4 text-left bg-white hover:bg-gray-50 flex justify-between items-center"
+                          >
+                            <div>
+                              <span className="font-semibold text-blue-800">{category}</span>
+                              <span className="ml-2 text-sm text-gray-600">
+                                ({partsByCategory[category]?.length || 0} Teile)
+                              </span>
+                              {selectedPartsByCategory[category]?.length > 0 && (
+                                <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                                  {selectedPartsByCategory[category].length} gewählt
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-gray-400">
+                              {expandedCategory === category ? '▼' : '▶'}
                             </span>
-                          </div>
-                          <div className="space-y-2">
-                            {partsByCategory[category]?.map(part => (
-                              <label key={part._id} className="flex items-center p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
-                                <input
-                                  type="checkbox"
-                                  checked={(selectedPartsByCategory[category] || []).includes(part._id)}
-                                  onChange={() => handlePartToggle(category, part._id)}
-                                  className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-gray-900 truncate">{part.description}</div>
-                                  <div className="text-sm text-gray-500">Teil-Nr: {part.partNumber}</div>
-                                  <div className="text-lg font-bold text-green-600">{part.price.toFixed(2)} €</div>
-                                </div>
-                              </label>
-                            )) || []}
-                          </div>
+                          </button>
+                          
+                          {expandedCategory === category && (
+                            <div className="p-3 bg-gray-50 space-y-2">
+                              {/* SPEZIELLE BEHANDLUNG FÜR BACK COVER UND DISPLAY */}
+                              {(category.toLowerCase().includes('back cover') || 
+                                category.toLowerCase().includes('gehäuse') || 
+                                category.toLowerCase().includes('housing') ||
+                                category.toLowerCase().includes('display') ||
+                                category.toLowerCase().includes('screen')) ? (
+                                // Gruppierung nach Qualität für Back Cover
+                                (() => {
+                                  const qualityGroups = {};
+                                  partsByCategory[category]?.forEach(part => {
+                                    const quality = extractQuality(part.description);
+                                    if (!qualityGroups[quality]) qualityGroups[quality] = [];
+                                    qualityGroups[quality].push(part);
+                                  });
+                                  
+                                  // Sortierung: Refurbished > Pulled B > Pulled > Standard
+                                  const qualityOrder = ['Refurbished', 'Pulled B', 'Pulled', 'New', 'OEM', 'Standard'];
+                                  const sortedQualities = Object.keys(qualityGroups).sort((a, b) => {
+                                    return qualityOrder.indexOf(a) - qualityOrder.indexOf(b);
+                                  });
+                                  
+                                  return sortedQualities.map(quality => (
+                                    <div key={quality} className="mb-4">
+                                      <div className="text-sm font-semibold text-gray-700 mb-2 px-2 py-1 bg-gray-200 rounded">
+                                        {quality} ({qualityGroups[quality].length} Farben)
+                                      </div>
+                                      <div className="grid grid-cols-1 gap-2">
+                                        {qualityGroups[quality].map(part => (
+                                          <label key={part._id} className="flex items-start p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                                            <input
+                                              type="checkbox"
+                                              checked={(selectedPartsByCategory[category] || []).includes(part._id)}
+                                              onChange={() => handlePartToggle(category, part._id)}
+                                              className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1 flex-shrink-0"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-gray-900">
+                                                  {extractColor(part.description)}
+                                                </span>
+                                                <span className="text-sm font-bold text-green-600 ml-2">
+                                                  {part.price.toFixed(2)} €
+                                                </span>
+                                              </div>
+                                              <div className="text-xs text-gray-500 mt-1">
+                                                {part.partNumber}
+                                              </div>
+                                            </div>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ));
+                                })()
+                              ) : (
+                                // Standard-Darstellung für andere Kategorien
+                                partsByCategory[category]?.map(part => (
+                                  <label key={part._id} className="flex items-start p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                                    <input
+                                      type="checkbox"
+                                      checked={(selectedPartsByCategory[category] || []).includes(part._id)}
+                                      onChange={() => handlePartToggle(category, part._id)}
+                                      className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1 flex-shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-gray-900 text-sm leading-5">{part.description}</div>
+                                      <div className="text-xs text-gray-500 mt-1">Teil-Nr: {part.partNumber}</div>
+                                      <div className="text-base font-bold text-green-600 mt-1">{part.price.toFixed(2)} €</div>
+                                    </div>
+                                  </label>
+                                )) || []
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
                   </div>
-                </div>
+                ) : (
+                  /* DESKTOP: Original Style */
+                  <div className="border rounded p-4 bg-gray-50 relative">
+                    <div className="max-h-80 overflow-y-auto">
+                      {availableCategories.length === 0 ? (
+                        <p className="text-gray-500">Keine Ersatzteile für dieses Modell verfügbar</p>
+                      ) : (
+                        availableCategories.map(category => (
+                          <div key={category} className="mb-4 last:mb-0">
+                            <div className="font-semibold mb-3 text-blue-800 border-b border-blue-200 pb-1">
+                              {category}
+                              <span className="ml-2 text-sm font-normal text-gray-600">
+                                ({partsByCategory[category]?.length || 0} Teile)
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {/* SPEZIELLE BEHANDLUNG FÜR BACK COVER */}
+                              {category.toLowerCase().includes('back cover') || category.toLowerCase().includes('gehäuse') || category.toLowerCase().includes('housing') ? (
+                                // Gruppierung nach Qualität für Back Cover
+                                (() => {
+                                  const qualityGroups = {};
+                                  partsByCategory[category]?.forEach(part => {
+                                    const quality = extractQuality(part.description);
+                                    if (!qualityGroups[quality]) qualityGroups[quality] = [];
+                                    qualityGroups[quality].push(part);
+                                  });
+                                  
+                                  // Sortierung: Refurbished > Pulled B > Pulled > Standard
+                                  const qualityOrder = ['Refurbished', 'Pulled B', 'Pulled', 'New', 'OEM', 'Standard'];
+                                  const sortedQualities = Object.keys(qualityGroups).sort((a, b) => {
+                                    return qualityOrder.indexOf(a) - qualityOrder.indexOf(b);
+                                  });
+                                  
+                                  return sortedQualities.map(quality => (
+                                    <div key={quality} className="mb-4">
+                                      <div className="text-sm font-semibold text-gray-700 mb-2 px-3 py-2 bg-gray-200 rounded">
+                                        {quality} ({qualityGroups[quality].length} Farben)
+                                      </div>
+                                      <div className="space-y-1">
+                                        {qualityGroups[quality].map(part => (
+                                          <label key={part._id} className="flex items-center p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                                            <input
+                                              type="checkbox"
+                                              checked={(selectedPartsByCategory[category] || []).includes(part._id)}
+                                              onChange={() => handlePartToggle(category, part._id)}
+                                              className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex justify-between items-center">
+                                                <span className="font-medium text-gray-900">
+                                                  {extractColor(part.description)}
+                                                </span>
+                                                <span className="text-lg font-bold text-green-600">
+                                                  {part.price.toFixed(2)} €
+                                                </span>
+                                              </div>
+                                              <div className="text-sm text-gray-500">
+                                                {part.partNumber}
+                                              </div>
+                                            </div>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ));
+                                })()
+                              ) : (
+                                // Standard-Darstellung für andere Kategorien
+                                partsByCategory[category]?.map(part => (
+                                  <label key={part._id} className="flex items-center p-3 hover:bg-white rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all">
+                                    <input
+                                      type="checkbox"
+                                      checked={(selectedPartsByCategory[category] || []).includes(part._id)}
+                                      onChange={() => handlePartToggle(category, part._id)}
+                                      className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-gray-900 truncate">{part.description}</div>
+                                      <div className="text-sm text-gray-500">Teil-Nr: {part.partNumber}</div>
+                                      <div className="text-lg font-bold text-green-600">{part.price.toFixed(2)} €</div>
+                                    </div>
+                                  </label>
+                                )) || []
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">
+                <label className="block text-gray-700 font-medium mb-2 text-sm md:text-base">
                   Erwarteter Marktpreis (€)
                 </label>
                 <input
                   type="number"
                   value={marketPrice}
                   onChange={(e) => setMarketPrice(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 md:py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
                   min="0"
                   step="10"
                   placeholder="z.B. 350"
@@ -341,14 +701,14 @@ const PriceCalculator = () => {
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 font-medium mb-2">
+                <label className="block text-gray-700 font-medium mb-2 text-sm md:text-base">
                   Gewünschter Gewinn (€)
                 </label>
                 <input
                   type="number"
                   value={desiredProfit}
                   onChange={(e) => setDesiredProfit(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 md:py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
                   min="0"
                   step="10"
                   placeholder="z.B. 50"
@@ -359,10 +719,10 @@ const PriceCalculator = () => {
         </div>
 
         <div>
-          <h3 className="text-xl font-semibold mb-4">💰 Kalkulation</h3>
+          <h3 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">💰 Kalkulation</h3>
 
-          <div className="bg-gray-100 p-4 rounded mb-4">
-            <h4 className="font-semibold mb-2">🔧 Ersatzteilkosten</h4>
+          <div className="bg-gray-100 p-3 md:p-4 rounded mb-4">
+            <h4 className="font-semibold mb-2 text-sm md:text-base">🔧 Ersatzteilkosten</h4>
             {selectedModel && Object.values(selectedPartsByCategory).flat().length > 0 ? (
               <div>
                 {Object.entries(selectedPartsByCategory).map(([category, ids]) =>
@@ -371,15 +731,16 @@ const PriceCalculator = () => {
                     if (!part) return null;
                     return (
                       <div key={id} className="flex justify-between mb-1 py-1">
-                        <span className="text-sm">
-                          <span className="font-medium">{category}:</span> {part.description}
+                        <span className="text-xs md:text-sm flex-1 pr-2">
+                          <span className="font-medium">{category}:</span> 
+                          <span className="block md:inline md:ml-1">{part.description}</span>
                         </span>
-                        <span className="font-bold">{part.price.toFixed(2)} €</span>
+                        <span className="font-bold text-sm md:text-base">{part.price.toFixed(2)} €</span>
                       </div>
                     );
                   })
                 )}
-                <div className="border-t mt-2 pt-2 font-bold flex justify-between text-lg">
+                <div className="border-t mt-2 pt-2 font-bold flex justify-between text-base md:text-lg">
                   <span>Gesamt:</span>
                   <span className="text-blue-600">
                     {calculatePartsCost().toFixed(2)} €
@@ -387,28 +748,28 @@ const PriceCalculator = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500">Wählen Sie ein Modell und Ersatzteile aus</p>
+              <p className="text-gray-500 text-sm">Wählen Sie ein Modell und Ersatzteile aus</p>
             )}
           </div>
 
-          <div className="bg-blue-100 p-4 rounded mb-4">
-            <h4 className="font-semibold mb-2">🎯 Maximaler Einkaufspreis</h4>
-            <p className="text-4xl font-bold text-blue-700 mb-2">
+          <div className="bg-blue-100 p-3 md:p-4 rounded mb-4">
+            <h4 className="font-semibold mb-2 text-sm md:text-base">🎯 Maximaler Einkaufspreis</h4>
+            <p className="text-2xl md:text-4xl font-bold text-blue-700 mb-2">
               {calculateMaxPurchasePrice().toFixed(2)} €
             </p>
-            <p className="text-sm text-blue-600">
-              Berechnung: {marketPrice.toFixed(2)} € (Marktpreis) - {calculatePartsCost().toFixed(2)} € (Teile) - {desiredProfit.toFixed(2)} € (Gewinn)
+            <p className="text-xs md:text-sm text-blue-600">
+              {marketPrice.toFixed(2)} € (Markt) - {calculatePartsCost().toFixed(2)} € (Teile) - {desiredProfit.toFixed(2)} € (Gewinn)
             </p>
           </div>
 
-          <div className="bg-green-100 p-4 rounded mb-4">
-            <h4 className="font-semibold mb-2">📊 Gewinnkalkulation</h4>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="bg-green-100 p-3 md:p-4 rounded mb-4">
+            <h4 className="font-semibold mb-2 text-sm md:text-base">📊 Gewinnkalkulation</h4>
+            <div className="grid grid-cols-2 gap-2 md:gap-3">
               {[100, 150, 200, 250].map(price => (
-                <div key={price} className="bg-white p-3 rounded">
+                <div key={price} className="bg-white p-2 md:p-3 rounded">
                   <p className="text-xs text-gray-600">Einkauf für:</p>
-                  <p className="font-semibold text-lg">{price} €</p>
-                  <p className={`text-sm font-bold ${calculatePotentialProfit(price) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className="font-semibold text-sm md:text-lg">{price} €</p>
+                  <p className={`text-xs md:text-sm font-bold ${calculatePotentialProfit(price) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     Gewinn: {calculatePotentialProfit(price).toFixed(2)} €
                   </p>
                 </div>
@@ -418,13 +779,13 @@ const PriceCalculator = () => {
 
           {/* Marktdaten falls verfügbar */}
           {similarDevices.length > 0 && (
-            <div className="bg-yellow-100 p-4 rounded">
-              <h4 className="font-semibold mb-2">📈 Ähnliche verkaufte Geräte</h4>
-              <div className="text-sm space-y-1">
+            <div className="bg-yellow-100 p-3 md:p-4 rounded">
+              <h4 className="font-semibold mb-2 text-sm md:text-base">📈 Ähnliche verkaufte Geräte</h4>
+              <div className="text-xs md:text-sm space-y-1">
                 {similarDevices.slice(0, 3).map((device, index) => (
                   <div key={index} className="flex justify-between">
-                    <span>{device.model}</span>
-                    <span className="font-bold">{device.sellingPrice}€ (Gewinn: {device.profit.toFixed(0)}€)</span>
+                    <span className="flex-1 pr-2">{device.model}</span>
+                    <span className="font-bold whitespace-nowrap">{device.sellingPrice}€ (Gewinn: {device.profit.toFixed(0)}€)</span>
                   </div>
                 ))}
               </div>
