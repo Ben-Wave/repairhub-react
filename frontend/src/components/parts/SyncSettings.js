@@ -24,6 +24,7 @@ const SyncSettings = () => {
   
   const [availableCategories, setAvailableCategories] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   
   const { getParts } = useContext(PartsContext);
   
@@ -212,186 +213,303 @@ const SyncSettings = () => {
   };
   
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h2 className="text-2xl font-bold mb-4">Foneday Katalog-Synchronisation</h2>
-      
-      {status.error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
-          <p>{status.error}</p>
-        </div>
-      )}
-      
-      {status.successMessage && (
-        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
-          <p>{status.successMessage}</p>
-        </div>
-      )}
-      
-      <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-semibold mb-4">Synchronisationsstatus</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div className="bg-gray-50 p-4 rounded">
-            <p className="text-sm text-gray-500 mb-1">Letzte Synchronisation</p>
-            <p className="font-medium">{formatDate(status.lastSync)}</p>
-          </div>
-          
-          <div className="bg-gray-50 p-4 rounded">
-            <p className="text-sm text-gray-500 mb-1">Nächste Synchronisation</p>
-            <p className="font-medium">{formatDate(status.nextSync)}</p>
-          </div>
-          
-          <div className="bg-gray-50 p-4 rounded">
-            <p className="text-sm text-gray-500 mb-1">Status</p>
-            <p className="font-medium">
-              {config.syncEnabled ? (
-                <span className="text-green-600">Aktiviert</span>
-              ) : (
-                <span className="text-red-600">Deaktiviert</span>
-              )}
-            </p>
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
+        {/* Header - Mobile optimized */}
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-blue-900 mb-2">🔄 Foneday Katalog-Synchronisation</h2>
+          <p className="text-sm sm:text-base text-gray-600">Automatische Synchronisation mit dem Foneday Katalog verwalten</p>
         </div>
         
-        <button
-          onClick={startSync}
-          disabled={status.isSyncing}
-          className={`w-full py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${
-            status.isSyncing ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {status.isSyncing ? 'Synchronisierung läuft...' : 'Jetzt synchronisieren'}
-        </button>
-      </div>
-      
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">Einstellungen</h3>
-        
-        {status.isLoading ? (
-          <div className="text-center py-6">
-            <div className="spinner-border" role="status">
-              <span className="sr-only">Lädt...</span>
+        {/* Alerts - Mobile optimized */}
+        {status.error && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-lg" role="alert">
+            <div className="flex items-center">
+              <span className="text-lg mr-2">⚠️</span>
+              <p className="text-sm sm:text-base">{status.error}</p>
             </div>
           </div>
-        ) : (
-          <form onSubmit={(e) => { e.preventDefault(); saveConfig(); }}>
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="syncEnabled"
-                  checked={config.syncEnabled}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <span>Automatische Synchronisation aktivieren</span>
-              </label>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Synchronisationsintervall (Cron-Ausdruck)
-              </label>
-              <input
-                type="text"
-                name="syncInterval"
-                value={config.syncInterval}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-                placeholder="0 0 * * *"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Standard: 0 0 * * * (Täglich um Mitternacht)
-              </p>
-              <p className="text-sm text-gray-500">
-                Weitere Beispiele: <br/>
-                0 */6 * * * = Alle 6 Stunden <br/>
-                0 8 * * 1-5 = Wochentags um 8 Uhr <br/>
-                0 20 * * 0 = Sonntags um 20 Uhr
-              </p>
-            </div>
-            
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="autoUpdatePrices"
-                  checked={config.autoUpdatePrices}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <span>Preise automatisch aktualisieren</span>
-              </label>
-            </div>
-            
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="addNewParts"
-                  checked={config.addNewParts}
-                  onChange={handleChange}
-                  className="mr-2"
-                />
-                <span>Neue Ersatzteile hinzufügen</span>
-              </label>
-            </div>
-            
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Nach Kategorien filtern</h4>
-              <p className="text-sm text-gray-500 mb-2">
-                Wähle die Kategorien aus, die synchronisiert werden sollen (leer = alle)
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 border rounded">
-                {availableCategories.map(category => (
-                  <label key={category} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value={category}
-                      checked={config.categories.includes(category)}
-                      onChange={handleCategoryChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">{category}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <h4 className="font-medium mb-2">Nach Modellen filtern</h4>
-              <p className="text-sm text-gray-500 mb-2">
-                Wähle die Modelle aus, die synchronisiert werden sollen (leer = alle)
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 border rounded">
-                {availableModels.map(model => (
-                  <label key={model} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value={model}
-                      checked={config.models.includes(model)}
-                      onChange={handleModelChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">{model}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            
-            <button
-              type="submit"
-              disabled={status.isSaving}
-              className={`w-full py-2 px-4 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 ${
-                status.isSaving ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {status.isSaving ? 'Speichern...' : 'Einstellungen speichern'}
-            </button>
-          </form>
         )}
+        
+        {status.successMessage && (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded-lg" role="alert">
+            <div className="flex items-center">
+              <span className="text-lg mr-2">✅</span>
+              <p className="text-sm sm:text-base">{status.successMessage}</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Status Card - Mobile optimized */}
+        <div className="bg-white shadow-md rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            📊 Synchronisationsstatus
+          </h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <span className="text-lg mr-2">🕐</span>
+                <p className="text-sm text-gray-500">Letzte Synchronisation</p>
+              </div>
+              <p className="font-medium text-sm sm:text-base">{formatDate(status.lastSync)}</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <span className="text-lg mr-2">⏰</span>
+                <p className="text-sm text-gray-500">Nächste Synchronisation</p>
+              </div>
+              <p className="font-medium text-sm sm:text-base">{formatDate(status.nextSync)}</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <span className="text-lg mr-2">🚦</span>
+                <p className="text-sm text-gray-500">Status</p>
+              </div>
+              <p className="font-medium">
+                {config.syncEnabled ? (
+                  <span className="text-green-600 flex items-center">
+                    <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
+                    Aktiviert
+                  </span>
+                ) : (
+                  <span className="text-red-600 flex items-center">
+                    <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
+                    Deaktiviert
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={startSync}
+            disabled={status.isSyncing}
+            className={`w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors font-medium ${
+              status.isSyncing ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {status.isSyncing ? (
+              <span className="flex items-center justify-center">
+                <span className="mr-2">⏳</span>
+                Synchronisierung läuft...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center">
+                <span className="mr-2">🔄</span>
+                Jetzt synchronisieren
+              </span>
+            )}
+          </button>
+        </div>
+        
+        {/* Settings Card - Mobile optimized */}
+        <div className="bg-white shadow-md rounded-lg p-4 sm:p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            ⚙️ Einstellungen
+          </h3>
+          
+          {status.isLoading ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-4xl mb-4">⏳</div>
+              <p className="text-gray-500">Einstellungen werden geladen...</p>
+            </div>
+          ) : (
+            <form onSubmit={(e) => { e.preventDefault(); saveConfig(); }} className="space-y-6">
+              {/* Basic Settings */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 flex items-center">
+                  🔧 Grundeinstellungen
+                </h4>
+                
+                <div className="space-y-4">
+                  <label className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      name="syncEnabled"
+                      checked={config.syncEnabled}
+                      onChange={handleChange}
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm sm:text-base font-medium">Automatische Synchronisation aktivieren</span>
+                      <p className="text-xs sm:text-sm text-gray-500">Automatische Aktualisierung nach festgelegtem Zeitplan</p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      name="autoUpdatePrices"
+                      checked={config.autoUpdatePrices}
+                      onChange={handleChange}
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm sm:text-base font-medium">Preise automatisch aktualisieren</span>
+                      <p className="text-xs sm:text-sm text-gray-500">Übernimmt neue Preise aus dem Foneday Katalog</p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      name="addNewParts"
+                      checked={config.addNewParts}
+                      onChange={handleChange}
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-sm sm:text-base font-medium">Neue Ersatzteile hinzufügen</span>
+                      <p className="text-xs sm:text-sm text-gray-500">Fügt automatisch neue Artikel aus dem Katalog hinzu</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Sync Interval */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ⏰ Synchronisationsintervall (Cron-Ausdruck)
+                </label>
+                <input
+                  type="text"
+                  name="syncInterval"
+                  value={config.syncInterval}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0 0 * * *"
+                />
+                <div className="mt-2 text-xs sm:text-sm text-gray-500 space-y-1">
+                  <p><strong>Standard:</strong> 0 0 * * * (Täglich um Mitternacht)</p>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                      Weitere Beispiele anzeigen
+                    </summary>
+                    <div className="mt-2 pl-4 space-y-1">
+                      <p>• 0 */6 * * * = Alle 6 Stunden</p>
+                      <p>• 0 8 * * 1-5 = Wochentags um 8 Uhr</p>
+                      <p>• 0 20 * * 0 = Sonntags um 20 Uhr</p>
+                    </div>
+                  </details>
+                </div>
+              </div>
+              
+              {/* Advanced Settings Toggle */}
+              <div className="border-t border-gray-200 pt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                  className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <span className="flex items-center text-sm sm:text-base font-medium">
+                    🔍 Erweiterte Filter-Einstellungen
+                  </span>
+                  <span className="text-gray-400">
+                    {showAdvancedSettings ? '🔺' : '🔻'}
+                  </span>
+                </button>
+                
+                {showAdvancedSettings && (
+                  <div className="mt-4 space-y-6">
+                    {/* Categories Filter */}
+                    <div>
+                      <h4 className="font-medium mb-3 flex items-center">
+                        🏷️ Nach Kategorien filtern
+                      </h4>
+                      <p className="text-xs sm:text-sm text-gray-500 mb-3">
+                        Wähle die Kategorien aus, die synchronisiert werden sollen (leer = alle)
+                      </p>
+                      
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {availableCategories.map(category => (
+                            <label key={category} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                value={category}
+                                checked={config.categories.includes(category)}
+                                onChange={handleCategoryChange}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm truncate" title={category}>
+                                {category}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        {availableCategories.length === 0 && (
+                          <p className="text-gray-400 text-center py-4">
+                            Keine Kategorien verfügbar
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Models Filter */}
+                    <div>
+                      <h4 className="font-medium mb-3 flex items-center">
+                        📱 Nach Modellen filtern
+                      </h4>
+                      <p className="text-xs sm:text-sm text-gray-500 mb-3">
+                        Wähle die Modelle aus, die synchronisiert werden sollen (leer = alle)
+                      </p>
+                      
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {availableModels.map(model => (
+                            <label key={model} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                value={model}
+                                checked={config.models.includes(model)}
+                                onChange={handleModelChange}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm truncate" title={model}>
+                                {model}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        {availableModels.length === 0 && (
+                          <p className="text-gray-400 text-center py-4">
+                            Keine Modelle verfügbar
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Save Button */}
+              <div className="border-t border-gray-200 pt-6">
+                <button
+                  type="submit"
+                  disabled={status.isSaving}
+                  className={`w-full py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors font-medium ${
+                    status.isSaving ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {status.isSaving ? (
+                    <span className="flex items-center justify-center">
+                      <span className="mr-2">⏳</span>
+                      Speichern...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <span className="mr-2">💾</span>
+                      Einstellungen speichern
+                    </span>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

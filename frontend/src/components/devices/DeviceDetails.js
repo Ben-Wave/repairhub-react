@@ -31,6 +31,8 @@ const DeviceDetails = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  const [showPartsSection, setShowPartsSection] = useState(false);
+  const [activeSection, setActiveSection] = useState('info'); // 'info', 'parts', 'costs'
   
   // Hilfs-/Berechungsfunktionen zuerst definieren
   const calculateTotalPartsPrice = () => {
@@ -234,354 +236,724 @@ const DeviceDetails = () => {
   }
   
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      {alert && (
-        <Alert 
-          message={alert.message} 
-          type={alert.type} 
-          onClose={() => setAlert(null)} 
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
+        {alert && (
+          <Alert 
+            message={alert.message} 
+            type={alert.type} 
+            onClose={() => setAlert(null)} 
+          />
+        )}
+        
+        <SalesModal 
+          isOpen={isSalesModalOpen} 
+          onClose={() => setIsSalesModalOpen(false)} 
+          onSave={handleSaveActualSellingPrice}
+          desiredSellingPrice={device.sellingPrice || calculateSellingPrice()}
         />
-      )}
-      
-      <SalesModal 
-        isOpen={isSalesModalOpen} 
-        onClose={() => setIsSalesModalOpen(false)} 
-        onSave={handleSaveActualSellingPrice}
-        desiredSellingPrice={device.sellingPrice || calculateSellingPrice()}
-      />
-      
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-blue-900">
-          Gerät: {device.modelDesc || device.model}
-        </h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => navigate('/devices')}
-            className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-          >
-            Zurück
-          </button>
-          <button
-            onClick={handleDeleteDevice}
-            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Löschen
-          </button>
-        </div>
-      </div>
-      
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-xl font-semibold mb-3">Geräteinformationen</h3>
-          
-          {device.thumbnail && (
-            <div className="mb-4">
-              <img 
-                src={device.thumbnail} 
-                alt={device.model} 
-                className="max-w-xs mx-auto"
-              />
+        
+        {/* Header - Mobile optimized */}
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl sm:text-2xl font-bold text-blue-900 leading-tight">
+                {device.modelDesc || device.model}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1 break-all">IMEI: {device.imei}</p>
             </div>
-          )}
-          
-          <div className="bg-gray-100 p-4 rounded mb-4">
-            <div className="grid grid-cols-2 gap-2">
-              <p className="text-gray-600">IMEI:</p>
-              <p className="font-medium">{device.imei}</p>
-              
-              {device.imei2 && (
-                <>
-                  <p className="text-gray-600">IMEI2:</p>
-                  <p className="font-medium">{device.imei2}</p>
-                </>
-              )}
-              
-              <p className="text-gray-600">Seriennummer:</p>
-              <p className="font-medium">{device.serial}</p>
-              
-              <p className="text-gray-600">Modell:</p>
-              <p className="font-medium">{device.model}</p>
-              
-              <p className="text-gray-600">Status:</p>
-              <div>
-                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusColorMap[device.status] || 'bg-gray-100 text-gray-800'}`}>
-                  {getStatusLabel(device.status)}
-                </span>
-              </div>
-              
-              <p className="text-gray-600">Garantiestatus:</p>
-              <p className="font-medium">{device.warrantyStatus}</p>
-              
-              <p className="text-gray-600">Blockierung:</p>
-              <p className={`font-medium ${device.usaBlockStatus === 'Clean' ? 'text-green-600' : 'text-red-600'}`}>
-                {device.usaBlockStatus}
-              </p>
-              
-              <p className="text-gray-600">SIM-Lock:</p>
-              <p className={`font-medium ${!device.simLock ? 'text-green-600' : 'text-red-600'}`}>
-                {!device.simLock ? 'Entsperrt' : 'Gesperrt'}
-              </p>
-              
-              <p className="text-gray-600">Find My iPhone:</p>
-              <p className={`font-medium ${!device.fmiOn ? 'text-green-600' : 'text-red-600'}`}>
-                {!device.fmiOn ? 'Aus' : 'An'}
-              </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate('/devices')}
+                className="px-3 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition duration-200 text-sm"
+              >
+                ← Zurück
+              </button>
+              <button
+                onClick={handleDeleteDevice}
+                className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition duration-200 text-sm"
+              >
+                Löschen
+              </button>
             </div>
           </div>
-          
-          <div className="mb-4">
-            <h4 className="font-semibold mb-2">Status ändern</h4>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'].map(st => (
+        </div>
+
+        {/* Mobile Section Navigation */}
+        <div className="block lg:hidden mb-6">
+          <div className="bg-white rounded-lg shadow-md p-1">
+            <div className="grid grid-cols-3 gap-1">
+              {[
+                { key: 'info', label: '📱 Info', icon: '📱' },
+                { key: 'parts', label: '🔧 Teile', icon: '🔧' },
+                { key: 'costs', label: '💰 Kosten', icon: '💰' }
+              ].map(section => (
                 <button
-                  key={st}
-                  className={`px-3 py-1 rounded ${device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]}`}
-                  onClick={() => handleStatusChange(st)}
+                  key={section.key}
+                  onClick={() => setActiveSection(section.key)}
+                  className={`p-3 rounded-md text-center transition duration-200 ${
+                    activeSection === section.key
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
                 >
-                  {getStatusLabel(st)}
+                  <div className="text-lg mb-1">{section.icon}</div>
+                  <div className="text-xs font-medium">{section.label}</div>
                 </button>
               ))}
             </div>
           </div>
         </div>
-        
-        <div>
-          <h3 className="text-xl font-semibold mb-3">Kaufdetails & Reparatur</h3>
-          
-          <div className="bg-gray-100 p-4 rounded mb-4">
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">
-                Einkaufspreis (€)
-              </label>
-              <input
-                type="number"
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">
-                Schadensbeschreibung
-              </label>
-              <textarea
-                value={damageDescription}
-                onChange={(e) => setDamageDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows="3"
-              ></textarea>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">
-                Gewünschter Gewinn (€)
-              </label>
-              <input
-                type="number"
-                value={desiredProfit}
-                onChange={(e) => setDesiredProfit(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0"
-                step="0.01"
-              />
-            </div>
-          </div>
-          
-          <div className="mb-4">
-            <h4 className="font-semibold mb-2">Ersatzteile</h4>
-            
-            <div className="mb-4">
-              <h5 className="font-medium mb-2">Ausgewählte Ersatzteile</h5>
-              {selectedParts.length === 0 ? (
-                <p className="text-gray-500">Keine Ersatzteile ausgewählt</p>
-              ) : (
-                <ul className="bg-gray-50 p-2 rounded">
-                  {selectedParts.map((part, index) => (
-                    <li key={index} className="flex justify-between items-center py-1 border-b last:border-0">
-                      <span>{part.partNumber}</span>
-                      <div className="flex items-center">
-                        <span className="mr-2">{part.price?.toFixed(2)} €</span>
-                        <button
-                          onClick={() => handleRemovePart(part.partNumber)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+
+        {/* Desktop Layout */}
+        <div className="hidden lg:grid lg:grid-cols-2 gap-6">
+          {/* Left Column - Device Info */}
+          <div className="space-y-6">
+            {/* Device Information */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-xl font-semibold mb-4">Geräteinformationen</h3>
+              
+              {device.thumbnail && (
+                <div className="mb-4 text-center">
+                  <img 
+                    src={device.thumbnail} 
+                    alt={device.model} 
+                    className="max-w-xs mx-auto"
+                  />
+                </div>
               )}
-            </div>
-            
-            <div className="mb-4">
-              <div className="bg-gray-100 p-3 rounded mb-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Filter-Typen */}
+              
+              <div className="bg-gray-100 p-4 rounded mb-4">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <p className="text-gray-600">IMEI:</p>
+                  <p className="font-medium break-all">{device.imei}</p>
+                  
+                  {device.imei2 && (
+                    <>
+                      <p className="text-gray-600">IMEI2:</p>
+                      <p className="font-medium break-all">{device.imei2}</p>
+                    </>
+                  )}
+                  
+                  <p className="text-gray-600">Seriennummer:</p>
+                  <p className="font-medium break-all">{device.serial}</p>
+                  
+                  <p className="text-gray-600">Modell:</p>
+                  <p className="font-medium">{device.model}</p>
+                  
+                  <p className="text-gray-600">Status:</p>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">Teile anzeigen</label>
-                    <select 
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                    >
-                      <option value="compatible">Nur kompatible Teile</option>
-                      <option value="all">Alle Teile</option>
-                    </select>
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusColorMap[device.status] || 'bg-gray-100 text-gray-800'}`}>
+                      {getStatusLabel(device.status)}
+                    </span>
                   </div>
                   
-                  {/* Kategoriefilter */}
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">Kategorie</label>
-                    <select 
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                    >
-                      <option value="">Alle Kategorien</option>
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <p className="text-gray-600">Garantiestatus:</p>
+                  <p className="font-medium">{device.warrantyStatus}</p>
                   
-                  {/* Suchfeld */}
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">Suche</label>
-                    <input 
-                      type="text"
-                      placeholder="Teilenummer oder Beschreibung..."
-                      className="w-full px-2 py-1 border border-gray-300 rounded"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
+                  <p className="text-gray-600">Blockierung:</p>
+                  <p className={`font-medium ${device.usaBlockStatus === 'Clean' ? 'text-green-600' : 'text-red-600'}`}>
+                    {device.usaBlockStatus}
+                  </p>
+                  
+                  <p className="text-gray-600">SIM-Lock:</p>
+                  <p className={`font-medium ${!device.simLock ? 'text-green-600' : 'text-red-600'}`}>
+                    {!device.simLock ? 'Entsperrt' : 'Gesperrt'}
+                  </p>
+                  
+                  <p className="text-gray-600">Find My iPhone:</p>
+                  <p className={`font-medium ${!device.fmiOn ? 'text-green-600' : 'text-red-600'}`}>
+                    {!device.fmiOn ? 'Aus' : 'An'}
+                  </p>
                 </div>
               </div>
               
-              <h5 className="font-medium mb-2">Verfügbare Ersatzteile</h5>
-              {filteredParts.length === 0 ? (
-                <p className="text-gray-500">
-                  Keine Ersatzteile gefunden, die den Filterkriterien entsprechen.
-                </p>
-              ) : (
-                <div className="bg-gray-50 p-2 rounded max-h-60 overflow-y-auto">
-                  {filteredParts.map(part => {
-                    const isSelected = selectedParts.some(p => p.partNumber === part.partNumber);
-                    const isInStock = typeof part.stock === 'number' ? part.stock > 0 : true;
-                    return (
-                      <div key={part._id} className="flex justify-between items-center py-1 border-b last:border-0">
-                        <div>
-                          <div className="flex items-center">
-                            <p className="font-medium">{part.partNumber}</p>
-                            {part.category && (
-                              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                {part.category}
-                              </span>
-                            )}
-                            {/* Lagerstatus anzeigen */}
-                            {isInStock ? (
-                              <span className="ml-2 text-green-600 text-xs font-semibold flex items-center">
-                                ✓ auf Lager
-                              </span>
-                            ) : (
-                              <span className="ml-2 text-red-500 text-xs font-semibold">
-                                Nicht auf Lager
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">{part.description}</p>
-                          <p className="text-xs text-gray-500">Für: {part.forModel}</p>
-                        </div>
+              {/* Status Change Buttons */}
+              <div className="mb-4">
+                <h4 className="font-semibold mb-3">Status ändern</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'].map(st => (
+                    <button
+                      key={st}
+                      className={`px-3 py-2 rounded text-sm font-medium transition duration-200 ${
+                        device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]
+                      }`}
+                      onClick={() => handleStatusChange(st)}
+                    >
+                      {getStatusLabel(st)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Details & Parts */}
+          <div className="space-y-6">
+            {/* Purchase Details */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-xl font-semibold mb-4">Kaufdetails & Reparatur</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2">
+                    Einkaufspreis (€)
+                  </label>
+                  <input
+                    type="number"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2">
+                    Schadensbeschreibung
+                  </label>
+                  <textarea
+                    value={damageDescription}
+                    onChange={(e) => setDamageDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                  ></textarea>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2">
+                    Gewünschter Gewinn (€)
+                  </label>
+                  <input
+                    type="number"
+                    value={desiredProfit}
+                    onChange={(e) => setDesiredProfit(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Parts Section */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h4 className="font-semibold mb-4">Ersatzteile</h4>
+              
+              {/* Selected Parts */}
+              <div className="mb-4">
+                <h5 className="font-medium mb-2">Ausgewählte Ersatzteile</h5>
+                {selectedParts.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Keine Ersatzteile ausgewählt</p>
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                    {selectedParts.map((part, index) => (
+                      <div key={index} className="flex justify-between items-center py-1 border-b last:border-0">
+                        <span className="text-sm">{part.partNumber}</span>
                         <div className="flex items-center">
-                          <span className="mr-2">{part.price?.toFixed(2)} €</span>
+                          <span className="mr-2 text-sm">{part.price?.toFixed(2)} €</span>
                           <button
-                            onClick={() => handleAddPart(part)}
-                            className="text-blue-600 hover:text-blue-800"
-                            disabled={isSelected}
+                            onClick={() => handleRemovePart(part.partNumber)}
+                            className="text-red-600 hover:text-red-800 text-sm"
                           >
-                            {isSelected ? '✓' : '+'}
+                            ✕
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Parts Filter and Search */}
+              <div className="mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                  <select 
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                  >
+                    <option value="compatible">Nur kompatible</option>
+                    <option value="all">Alle Teile</option>
+                  </select>
+                  
+                  <select 
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                  >
+                    <option value="">Alle Kategorien</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  
+                  <input 
+                    type="text"
+                    placeholder="Suche..."
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-              )}
+                
+                {/* Available Parts */}
+                <h5 className="font-medium mb-2">Verfügbare Ersatzteile</h5>
+                {filteredParts.length === 0 ? (
+                  <p className="text-gray-500 text-sm">
+                    Keine Ersatzteile gefunden.
+                  </p>
+                ) : (
+                  <div className="bg-gray-50 p-2 rounded max-h-40 overflow-y-auto">
+                    {filteredParts.slice(0, 10).map(part => {
+                      const isSelected = selectedParts.some(p => p.partNumber === part.partNumber);
+                      const isInStock = typeof part.stock === 'number' ? part.stock > 0 : true;
+                      return (
+                        <div key={part._id} className="flex justify-between items-center py-1 border-b last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center">
+                              <p className="font-medium text-sm truncate">{part.partNumber}</p>
+                              {isInStock ? (
+                                <span className="ml-2 text-green-600 text-xs">✓</span>
+                              ) : (
+                                <span className="ml-2 text-red-500 text-xs">✗</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 truncate">{part.description}</p>
+                          </div>
+                          <div className="flex items-center ml-2">
+                            <span className="mr-2 text-sm">{part.price?.toFixed(2)} €</span>
+                            <button
+                              onClick={() => handleAddPart(part)}
+                              className="text-blue-600 hover:text-blue-800 text-sm"
+                              disabled={isSelected}
+                            >
+                              {isSelected ? '✓' : '+'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          
-          <div className="bg-blue-50 p-4 rounded mb-4">
-            <h4 className="font-semibold mb-2">Kostenübersicht</h4>
-            <div className="grid grid-cols-2 gap-2">
-              <p className="text-gray-600">Einkaufspreis:</p>
-              <p className="font-medium text-right">{parseFloat(purchasePrice).toFixed(2)} €</p>
-              
-              <p className="text-gray-600">Ersatzteile:</p>
-              <p className="font-medium text-right">{calculateTotalPartsPrice().toFixed(2)} €</p>
-              
-              <p className="text-gray-600">Gewünschter Gewinn:</p>
-              <p className="font-medium text-right">{parseFloat(desiredProfit).toFixed(2)} €</p>
-              
-              <p className="text-gray-700 font-bold">Kalkulierter Verkaufspreis:</p>
-              <p className="font-bold text-right text-blue-700">{calculateSellingPrice().toFixed(2)} €</p>
-              
-              {device.status === 'verkauft' && device.actualSellingPrice && (
-                <>
-                  <p className="text-gray-700 font-bold">Tatsächlicher Verkaufspreis:</p>
-                  <p className="font-bold text-right text-purple-700">{parseFloat(device.actualSellingPrice).toFixed(2)} €</p>
-                  
-                  <p className="text-gray-700 font-bold">Gewinnvergleich:</p>
-                  <p className="text-right">-</p>
-                  
-                  {/* Visuelle Gegenüberstellung des Gewinns */}
-                  <div className="col-span-2 bg-gray-100 p-3 rounded mt-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <div>
-                        <span className="text-sm text-gray-500">Gewünscht</span>
-                        <p className="font-bold text-gray-700">{parseFloat(desiredProfit).toFixed(2)} €</p>
-                      </div>
-                      
-                      <div className="text-center">
-                        {(() => {
-                          const diff = calculateActualProfit() - parseFloat(desiredProfit);
-                          const isPositive = diff >= 0;
-                          return (
-                            <>
-                              <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                {isPositive ? '+' : ''}{diff.toFixed(2)} €
-                              </span>
-                              <div className="flex justify-center mt-1">
-                                <span className={`inline-block w-5 h-5 rounded-full ${isPositive ? 'bg-green-100' : 'bg-red-100'} 
-                                  flex items-center justify-center`}>
-                                  <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                    {isPositive ? '▲' : '▼'}
-                                  </span>
+
+            {/* Cost Overview */}
+            <div className="bg-blue-50 rounded-lg shadow-md p-6">
+              <h4 className="font-semibold mb-4">Kostenübersicht</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Einkaufspreis:</span>
+                  <span className="font-medium">{parseFloat(purchasePrice).toFixed(2)} €</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ersatzteile:</span>
+                  <span className="font-medium">{calculateTotalPartsPrice().toFixed(2)} €</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Gewünschter Gewinn:</span>
+                  <span className="font-medium">{parseFloat(desiredProfit).toFixed(2)} €</span>
+                </div>
+                
+                <div className="flex justify-between pt-2 border-t border-blue-200">
+                  <span className="text-gray-700 font-bold">Kalkulierter Verkaufspreis:</span>
+                  <span className="font-bold text-blue-700">{calculateSellingPrice().toFixed(2)} €</span>
+                </div>
+                
+                {device.status === 'verkauft' && device.actualSellingPrice && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-700 font-bold">Tatsächlicher Verkaufspreis:</span>
+                      <span className="font-bold text-purple-700">{parseFloat(device.actualSellingPrice).toFixed(2)} €</span>
+                    </div>
+                    
+                    <div className="bg-gray-100 p-3 rounded mt-3">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-sm text-gray-500">Gewünscht</span>
+                          <p className="font-bold text-gray-700">{parseFloat(desiredProfit).toFixed(2)} €</p>
+                        </div>
+                        
+                        <div className="text-center">
+                          {(() => {
+                            const diff = calculateActualProfit() - parseFloat(desiredProfit);
+                            const isPositive = diff >= 0;
+                            return (
+                              <>
+                                <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isPositive ? '+' : ''}{diff.toFixed(2)} €
                                 </span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                      
-                      <div className="text-right">
-                        <span className="text-sm text-gray-500">Tatsächlich</span>
-                        <p className="font-bold text-green-600">{calculateActualProfit().toFixed(2)} €</p>
+                                <div className="flex justify-center mt-1">
+                                  <span className={`inline-block w-5 h-5 rounded-full ${isPositive ? 'bg-green-100' : 'bg-red-100'} 
+                                    flex items-center justify-center`}>
+                                    <span className={`text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                      {isPositive ? '▲' : '▼'}
+                                    </span>
+                                  </span>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        
+                        <div className="text-right">
+                          <span className="text-sm text-gray-500">Tatsächlich</span>
+                          <p className="font-bold text-green-600">{calculateActualProfit().toFixed(2)} €</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveChanges}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 font-medium"
+              >
+                Änderungen speichern
+              </button>
             </div>
           </div>
-          
-          <div className="flex justify-end">
+        </div>
+
+        {/* Mobile Layout - Section-based */}
+        <div className="block lg:hidden">
+          {/* Device Info Section */}
+          {activeSection === 'info' && (
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <h3 className="text-lg font-semibold mb-4">📱 Geräteinformationen</h3>
+              
+              {device.thumbnail && (
+                <div className="mb-4 text-center">
+                  <img 
+                    src={device.thumbnail} 
+                    alt={device.model} 
+                    className="max-w-xs mx-auto"
+                  />
+                </div>
+              )}
+              
+              <div className="space-y-3 mb-6">
+                {[
+                  { label: 'IMEI', value: device.imei },
+                  { label: 'IMEI2', value: device.imei2 },
+                  { label: 'Seriennummer', value: device.serial },
+                  { label: 'Modell', value: device.model },
+                  { label: 'Garantiestatus', value: device.warrantyStatus },
+                  { label: 'Blockierung', value: device.usaBlockStatus, color: device.usaBlockStatus === 'Clean' ? 'text-green-600' : 'text-red-600' },
+                  { label: 'SIM-Lock', value: !device.simLock ? 'Entsperrt' : 'Gesperrt', color: !device.simLock ? 'text-green-600' : 'text-red-600' },
+                  { label: 'Find My iPhone', value: !device.fmiOn ? 'Aus' : 'An', color: !device.fmiOn ? 'text-green-600' : 'text-red-600' }
+                ].filter(item => item.value).map((item, index) => (
+                  <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                    <span className="text-sm text-gray-600">{item.label}:</span>
+                    <span className={`text-sm font-medium break-all text-right ${item.color || 'text-gray-900'}`}>
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusColorMap[device.status] || 'bg-gray-100 text-gray-800'}`}>
+                    {getStatusLabel(device.status)}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Status Change Buttons - Mobile */}
+              <div>
+                <h4 className="font-semibold mb-3">Status ändern</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {['gekauft', 'in_reparatur', 'verkaufsbereit', 'zum_verkauf', 'verkauft'].map(st => (
+                    <button
+                      key={st}
+                      className={`px-3 py-2 rounded text-sm font-medium transition duration-200 ${
+                        device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]
+                      }`}
+                      onClick={() => handleStatusChange(st)}
+                    >
+                      {getStatusLabel(st)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Parts Section */}
+          {activeSection === 'parts' && (
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <h3 className="text-lg font-semibold mb-4">🔧 Ersatzteile & Reparatur</h3>
+              
+              {/* Purchase Details */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2 text-sm">
+                    Einkaufspreis (€)
+                  </label>
+                  <input
+                    type="number"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2 text-sm">
+                    Schadensbeschreibung
+                  </label>
+                  <textarea
+                    value={damageDescription}
+                    onChange={(e) => setDamageDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Beschreiben Sie die Schäden am Gerät..."
+                  ></textarea>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2 text-sm">
+                    Gewünschter Gewinn (€)
+                  </label>
+                  <input
+                    type="number"
+                    value={desiredProfit}
+                    onChange={(e) => setDesiredProfit(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              {/* Selected Parts */}
+              <div className="mb-6">
+                <h4 className="font-medium mb-2">Ausgewählte Ersatzteile</h4>
+                {selectedParts.length === 0 ? (
+                  <p className="text-gray-500 text-sm bg-gray-50 p-3 rounded">Keine Ersatzteile ausgewählt</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedParts.map((part, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <div>
+                          <p className="font-medium text-sm">{part.partNumber}</p>
+                          <p className="text-xs text-gray-600">Preis: {part.price?.toFixed(2)} €</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemovePart(part.partNumber)}
+                          className="text-red-600 hover:text-red-800 p-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    <div className="p-2 bg-blue-50 rounded">
+                      <p className="text-sm font-medium text-blue-900">
+                        Gesamtkosten Ersatzteile: {calculateTotalPartsPrice().toFixed(2)} €
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Parts Search */}
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowPartsSection(!showPartsSection)}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded mb-3 flex items-center justify-center"
+                >
+                  {showPartsSection ? 'Teile-Suche ausblenden' : 'Ersatzteile hinzufügen'}
+                  <svg className={`w-4 h-4 ml-2 transition-transform ${showPartsSection ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+
+                {showPartsSection && (
+                  <div className="space-y-4">
+                    {/* Filters */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <select 
+                        className="px-2 py-2 border border-gray-300 rounded text-sm"
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                      >
+                        <option value="compatible">Nur kompatible</option>
+                        <option value="all">Alle Teile</option>
+                      </select>
+                      
+                      <select 
+                        className="px-2 py-2 border border-gray-300 rounded text-sm"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                      >
+                        <option value="">Alle Kategorien</option>
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <input 
+                      type="text"
+                      placeholder="Teilenummer oder Beschreibung suchen..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    
+                    {/* Available Parts */}
+                    <div>
+                      <h5 className="font-medium mb-2">Verfügbare Ersatzteile</h5>
+                      {filteredParts.length === 0 ? (
+                        <p className="text-gray-500 text-sm bg-gray-50 p-3 rounded">
+                          Keine Ersatzteile gefunden.
+                        </p>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {filteredParts.slice(0, 20).map(part => {
+                            const isSelected = selectedParts.some(p => p.partNumber === part.partNumber);
+                            const isInStock = typeof part.stock === 'number' ? part.stock > 0 : true;
+                            return (
+                              <div key={part._id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center space-x-2">
+                                    <p className="font-medium text-sm truncate">{part.partNumber}</p>
+                                    {part.category && (
+                                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                        {part.category}
+                                      </span>
+                                    )}
+                                    <span className={`text-xs ${isInStock ? 'text-green-600' : 'text-red-500'}`}>
+                                      {isInStock ? '✓' : '✗'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-600 truncate">{part.description}</p>
+                                  <p className="text-xs text-gray-500">Für: {part.forModel}</p>
+                                </div>
+                                <div className="flex items-center ml-2">
+                                  <span className="mr-2 text-sm font-medium">{part.price?.toFixed(2)} €</span>
+                                  <button
+                                    onClick={() => handleAddPart(part)}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                                      isSelected 
+                                        ? 'bg-green-100 text-green-600' 
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                                    disabled={isSelected}
+                                  >
+                                    {isSelected ? '✓' : '+'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Costs Section */}
+          {activeSection === 'costs' && (
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <h3 className="text-lg font-semibold mb-4">💰 Kostenübersicht</h3>
+              
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Einkaufspreis:</span>
+                    <span className="font-medium">{parseFloat(purchasePrice).toFixed(2)} €</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Ersatzteile:</span>
+                    <span className="font-medium">{calculateTotalPartsPrice().toFixed(2)} €</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Gewünschter Gewinn:</span>
+                    <span className="font-medium">{parseFloat(desiredProfit).toFixed(2)} €</span>
+                  </div>
+                  
+                  <div className="border-t border-blue-200 pt-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700 font-bold">Kalkulierter Verkaufspreis:</span>
+                      <span className="font-bold text-blue-700 text-lg">{calculateSellingPrice().toFixed(2)} €</span>
+                    </div>
+                  </div>
+                  
+                  {device.status === 'verkauft' && device.actualSellingPrice && (
+                    <>
+                      <div className="border-t border-blue-200 pt-3">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-gray-700 font-bold">Tatsächlicher Verkaufspreis:</span>
+                          <span className="font-bold text-purple-700 text-lg">{parseFloat(device.actualSellingPrice).toFixed(2)} €</span>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-medium text-gray-900 mb-3">Gewinnvergleich</h4>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div>
+                            <span className="text-xs text-gray-500">Gewünscht</span>
+                            <p className="font-bold text-gray-700">{parseFloat(desiredProfit).toFixed(2)} €</p>
+                          </div>
+                          
+                          <div>
+                            {(() => {
+                              const diff = calculateActualProfit() - parseFloat(desiredProfit);
+                              const isPositive = diff >= 0;
+                              return (
+                                <div>
+                                  <span className="text-xs text-gray-500">Differenz</span>
+                                  <p className={`font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                    {isPositive ? '+' : ''}{diff.toFixed(2)} €
+                                  </p>
+                                  <div className="flex justify-center mt-1">
+                                    <span className={`inline-block w-6 h-6 rounded-full ${isPositive ? 'bg-green-100' : 'bg-red-100'} 
+                                      flex items-center justify-center`}>
+                                      <span className={`text-sm ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                        {isPositive ? '▲' : '▼'}
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          
+                          <div>
+                            <span className="text-xs text-gray-500">Tatsächlich</span>
+                            <p className="font-bold text-green-600">{calculateActualProfit().toFixed(2)} €</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Save Button - Always visible on mobile */}
+          <div className="mt-6">
             <button
               onClick={handleSaveChanges}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 font-medium text-lg"
             >
               Änderungen speichern
             </button>
