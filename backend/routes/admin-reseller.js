@@ -1,4 +1,4 @@
-// backend/routes/admin-reseller.js
+// backend/routes/admin-reseller.js - ERWEITERT mit Löschen/Deaktivieren
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { Reseller, DeviceAssignment, Device } = require('../models');
@@ -53,6 +53,142 @@ router.post('/resellers', async (req, res) => {
   }
 });
 
+// NEU: Reseller deaktivieren/aktivieren
+router.patch('/resellers/:resellerId/toggle-active', async (req, res) => {
+  try {
+    const { resellerId } = req.params;
+    const { reason } = req.body;
+
+    // Reseller finden
+    const reseller = await Reseller.findById(resellerId);
+    if (!reseller) {
+      return res.status(404).json({ error: 'Reseller nicht gefunden' });
+    }
+
+    // Status umschalten
+    const newStatus = !reseller.isActive;
+    
+    // Bei Deaktivierung prüfen ob aktive Zuweisungen existieren
+    if (!newStatus) {
+      const activeAssignments = await DeviceAssignment.find({
+        resellerId: resellerId,
+        status: { $in: ['assigned', 'received'] }
+      }).populate('deviceId', 'imei model');
+
+      if (activeAssignments.length > 0) {
+        return res.status(400).json({ 
+          error: 'Reseller hat noch aktive Gerätezuweisungen',
+          activeAssignments: activeAssignments.map(a => ({
+            deviceModel: a.deviceId.model,
+            deviceImei: a.deviceId.imei,
+            status: a.status
+          }))
+        });
+      }
+    }
+
+    // Status aktualisieren
+    reseller.isActive = newStatus;
+    reseller.updatedAt = new Date();
+    await reseller.save();
+
+    // Log-Eintrag (optional - könnte in separater Audit-Tabelle gespeichert werden)
+    console.log(`Reseller ${reseller.username} wurde ${newStatus ? 'aktiviert' : 'deaktiviert'}. Grund: ${reason || 'Kein Grund angegeben'}`);
+
+    // Antwort ohne Passwort
+    const resellerResponse = reseller.toObject();
+    delete resellerResponse.password;
+
+    res.json({
+      message: `Reseller erfolgreich ${newStatus ? 'aktiviert' : 'deaktiviert'}`,
+      reseller: resellerResponse
+    });
+
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Reseller-Status:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Reseller-Status' });
+  }
+});
+
+// NEU: Reseller löschen (mit Sicherheitsprüfungen)
+router.delete('/resellers/:resellerId', async (req, res) => {
+  try {
+    const { resellerId } = req.params;
+    const { confirmDeletion, reason } = req.body;
+
+    // Bestätigung prüfen
+    if (!confirmDeletion) {
+      return res.status(400).json({ error: 'Löschung muss explizit bestätigt werden' });
+    }
+
+    // Reseller finden
+    const reseller = await Reseller.findById(resellerId);
+    if (!reseller) {
+      return res.status(404).json({ error: 'Reseller nicht gefunden' });
+    }
+
+    // Alle Zuweisungen des Resellers abrufen
+    const allAssignments = await DeviceAssignment.find({ resellerId }).populate('deviceId', 'imei model status');
+    
+    // Aktive Zuweisungen prüfen
+    const activeAssignments = allAssignments.filter(a => a.status === 'assigned' || a.status === 'received');
+    if (activeAssignments.length > 0) {
+      return res.status(400).json({ 
+        error: 'Reseller kann nicht gelöscht werden - hat noch aktive Gerätezuweisungen',
+        activeAssignments: activeAssignments.map(a => ({
+          assignmentId: a._id,
+          deviceModel: a.deviceId.model,
+          deviceImei: a.deviceId.imei,
+          status: a.status
+        }))
+      });
+    }
+
+    // Verkaufte Geräte prüfen (Warnung, aber nicht blockierend)
+    const soldAssignments = allAssignments.filter(a => a.status === 'sold');
+    
+    // WICHTIG: Alle Zuweisungen des Resellers als "deleted_reseller" markieren
+    // statt sie zu löschen, um Datenintegrität zu wahren
+    await DeviceAssignment.updateMany(
+      { resellerId },
+      { 
+        $set: { 
+          notes: `${reason ? `RESELLER GELÖSCHT: ${reason}\n\n` : 'RESELLER GELÖSCHT\n\n'}Vorherige Notizen: ${soldAssignments[0]?.notes || 'Keine'}`,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    // Geräte von gelöschten aktiven Zuweisungen zurücksetzen (falls welche übersehen wurden)
+    for (const assignment of activeAssignments) {
+      await Device.findByIdAndUpdate(assignment.deviceId._id, {
+        status: 'verkaufsbereit'
+      });
+    }
+
+    // Reseller löschen
+    await Reseller.findByIdAndDelete(resellerId);
+
+    // Log-Eintrag
+    console.log(`Reseller ${reseller.username} (${reseller.name}) wurde gelöscht. Grund: ${reason || 'Kein Grund angegeben'}. Betroffene Zuweisungen: ${allAssignments.length}`);
+
+    res.json({
+      message: 'Reseller erfolgreich gelöscht',
+      deletedReseller: {
+        id: reseller._id,
+        username: reseller.username,
+        name: reseller.name
+      },
+      affectedAssignments: allAssignments.length,
+      soldAssignments: soldAssignments.length
+    });
+
+  } catch (error) {
+    console.error('Fehler beim Löschen des Resellers:', error);
+    res.status(500).json({ error: 'Fehler beim Löschen des Resellers' });
+  }
+});
+
 // Gerät einem Reseller zuweisen (ERWEITERT)
 router.post('/assign-device', async (req, res) => {
   try {
@@ -68,10 +204,14 @@ router.post('/assign-device', async (req, res) => {
       return res.status(400).json({ error: 'Gerät bereits verkauft' });
     }
 
-    // Prüfen ob Reseller existiert
+    // Prüfen ob Reseller existiert UND aktiv ist
     const reseller = await Reseller.findById(resellerId);
     if (!reseller) {
       return res.status(404).json({ error: 'Reseller nicht gefunden' });
+    }
+    
+    if (!reseller.isActive) {
+      return res.status(400).json({ error: 'Reseller ist nicht aktiv und kann keine Geräte erhalten' });
     }
 
     // Prüfen ob bereits zugewiesen
@@ -101,10 +241,14 @@ router.post('/assign-device', async (req, res) => {
   }
 });
 
-// Alle Reseller abrufen
+// Alle Reseller abrufen (ERWEITERT - auch inaktive anzeigen)
 router.get('/resellers', async (req, res) => {
   try {
-    const resellers = await Reseller.find({ isActive: true }).select('-password');
+    const { includeInactive } = req.query;
+    
+    const filter = includeInactive === 'true' ? {} : { isActive: true };
+    const resellers = await Reseller.find(filter).select('-password').sort({ createdAt: -1 });
+    
     res.json(resellers);
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Abrufen der Reseller' });
@@ -185,4 +329,5 @@ router.patch('/assignments/:assignmentId/revoke', async (req, res) => {
     res.status(500).json({ error: 'Fehler beim Entziehen des Geräts' });
   }
 });
+
 module.exports = router;
