@@ -34,6 +34,24 @@ const DeviceDetails = () => {
   const [showPartsSection, setShowPartsSection] = useState(false);
   const [activeSection, setActiveSection] = useState('info'); // 'info', 'parts', 'costs'
   
+  // NEU: Qualitätsprüfung State
+  const [showQualityCheck, setShowQualityCheck] = useState(false);
+  const [qualityChecklist, setQualityChecklist] = useState({
+    display: false,
+    touchscreen: false,
+    buttons: false,
+    speakers: false,
+    microphone: false,
+    camera: false,
+    battery: false,
+    charging: false,
+    wifi: false,
+    cellular: false,
+    sensors: false,
+    overall: false
+  });
+  const [qualityNotes, setQualityNotes] = useState('');
+  
   // Hilfs-/Berechungsfunktionen zuerst definieren
   const calculateTotalPartsPrice = () => {
     return selectedParts.reduce((total, part) => total + (part.price || 0), 0);
@@ -57,6 +75,77 @@ const DeviceDetails = () => {
     const modelRegex = /^(iPhone \d+(?:\s(?:mini|Pro|Pro Max))?)/i;
     const modelMatch = modelString.match(modelRegex);
     return modelMatch ? modelMatch[1] : '';
+  };
+  
+  // NEU: Qualitätsprüfungs-Funktionen
+  const resetQualityCheck = () => {
+    setQualityChecklist({
+      display: false,
+      touchscreen: false,
+      buttons: false,
+      speakers: false,
+      microphone: false,
+      camera: false,
+      battery: false,
+      charging: false,
+      wifi: false,
+      cellular: false,
+      sensors: false,
+      overall: false
+    });
+    setQualityNotes('');
+  };
+  
+  const getQualityCheckItems = () => [
+    { key: 'display', label: 'Display funktioniert einwandfrei (keine Pixelfehler, richtige Farben)', icon: '📱' },
+    { key: 'touchscreen', label: 'Touchscreen reagiert präzise in allen Bereichen', icon: '👆' },
+    { key: 'buttons', label: 'Alle Tasten funktionieren (Power, Lautstärke, Home/Touch ID)', icon: '🔘' },
+    { key: 'speakers', label: 'Lautsprecher und Hörmuschel funktionieren klar', icon: '🔊' },
+    { key: 'microphone', label: 'Mikrofon nimmt deutlich auf', icon: '🎤' },
+    { key: 'camera', label: 'Alle Kameras funktionieren (Foto/Video, Front/Back)', icon: '📷' },
+    { key: 'battery', label: 'Akku hält mindestens einen Tag normale Nutzung', icon: '🔋' },
+    { key: 'charging', label: 'Laden funktioniert schnell und zuverlässig', icon: '⚡' },
+    { key: 'wifi', label: 'WLAN verbindet sich stabil', icon: '📶' },
+    { key: 'cellular', label: 'Mobilfunk funktioniert (Anrufe, Daten)', icon: '📡' },
+    { key: 'sensors', label: 'Face ID/Touch ID und andere Sensoren funktionieren', icon: '🔍' },
+    { key: 'overall', label: 'Gerät läuft flüssig ohne Abstürze oder Hänger', icon: '✅' }
+  ];
+  
+  const isQualityCheckPassed = () => {
+    const items = getQualityCheckItems();
+    return items.every(item => qualityChecklist[item.key]);
+  };
+  
+  const handleQualityCheckSubmit = async () => {
+    if (!isQualityCheckPassed()) {
+      setAlert({ 
+        type: 'error', 
+        message: 'Bitte bestätigen Sie alle Qualitätsprüfungen bevor das Gerät als verkaufsbereit markiert wird.' 
+      });
+      return;
+    }
+    
+    try {
+      // Qualitätsprüfung in Notes speichern
+      const qualityReport = `QUALITÄTSPRÜFUNG BESTANDEN - ${new Date().toLocaleDateString('de-DE')}\n` +
+        `Geprüft von: Admin\n` +
+        `Alle Funktionen getestet und einwandfrei.\n` +
+        (qualityNotes ? `Zusätzliche Notizen: ${qualityNotes}\n` : '') +
+        `\nVorherige Beschreibung: ${damageDescription || 'Keine'}`;
+      
+      await updateDevice(id, { 
+        status: 'verkaufsbereit',
+        damageDescription: qualityReport,
+        updatedAt: new Date()
+      });
+      
+      setDamageDescription(qualityReport);
+      setShowQualityCheck(false);
+      resetQualityCheck();
+      setAlert({ type: 'success', message: 'Gerät erfolgreich als verkaufsbereit markiert! Qualitätsprüfung bestanden.' });
+    } catch (err) {
+      setAlert({ type: 'error', message: 'Fehler beim Aktualisieren des Status' });
+    }
   };
   
   // KRITISCHER FIX: Entferne getDevice aus Dependencies um Endlosschleife zu vermeiden
@@ -129,6 +218,10 @@ const DeviceDetails = () => {
     try {
       if (newStatus === 'verkauft') {
         setIsSalesModalOpen(true);
+      } else if (newStatus === 'verkaufsbereit' && device?.status === 'in_reparatur') {
+        // NEU: Qualitätsprüfung bei Wechsel von "in_reparatur" zu "verkaufsbereit"
+        setShowQualityCheck(true);
+        resetQualityCheck();
       } else {
         await updateDevice(id, { status: newStatus });
         setAlert({ type: 'success', message: 'Status erfolgreich aktualisiert' });
@@ -252,6 +345,166 @@ const DeviceDetails = () => {
           onSave={handleSaveActualSellingPrice}
           desiredSellingPrice={device.sellingPrice || calculateSellingPrice()}
         />
+        
+        {/* NEU: Qualitätsprüfung Modal */}
+        {showQualityCheck && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 p-4">
+            <div className="relative min-h-screen flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto">
+                <div className="p-4 sm:p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-medium text-gray-900 flex items-center">
+                      <span className="text-2xl mr-3">🔍</span>
+                      Qualitätsprüfung
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowQualityCheck(false);
+                        resetQualityCheck();
+                      }}
+                      className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Info Panel */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-800">
+                          <strong>Wichtig:</strong> Bevor das Gerät als "verkaufsbereit" markiert wird, müssen alle 
+                          Funktionen getestet und bestätigt werden. Dies stellt sicher, dass nur einwandfreie Geräte 
+                          an Kunden verkauft werden.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Device Info */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <h4 className="font-medium text-gray-900 mb-2">Geräteinformationen</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Modell:</span>
+                        <span className="ml-2 font-medium">{device.model}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">IMEI:</span>
+                        <span className="ml-2 font-medium break-all">{device.imei}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Aktueller Status:</span>
+                        <span className={`ml-2 inline-block px-2 py-1 rounded text-xs font-medium ${statusColorMap[device.status]}`}>
+                          {getStatusLabel(device.status)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Neuer Status:</span>
+                        <span className="ml-2 inline-block px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                          Verkaufsbereit
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Qualitäts-Checkliste */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">
+                      Funktionsprüfung - Alle Punkte müssen bestätigt werden
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {getQualityCheckItems().map((item) => (
+                        <div key={item.key} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-shrink-0 mt-1">
+                            <input
+                              type="checkbox"
+                              id={`quality-${item.key}`}
+                              checked={qualityChecklist[item.key]}
+                              onChange={(e) => setQualityChecklist({
+                                ...qualityChecklist,
+                                [item.key]: e.target.checked
+                              })}
+                              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                            />
+                          </div>
+                          <label htmlFor={`quality-${item.key}`} className="flex-1 cursor-pointer">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg">{item.icon}</span>
+                              <span className="text-sm font-medium text-gray-900">{item.label}</span>
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Progress Indicator */}
+                    <div className="mt-4 bg-gray-200 rounded-full h-3">
+                      <div 
+                        className="bg-green-600 h-3 rounded-full transition-all duration-300"
+                        style={{ 
+                          width: `${(Object.values(qualityChecklist).filter(Boolean).length / getQualityCheckItems().length) * 100}%` 
+                        }}
+                      ></div>
+                    </div>
+                    <p className="text-center text-sm text-gray-600 mt-2">
+                      {Object.values(qualityChecklist).filter(Boolean).length} von {getQualityCheckItems().length} Punkten bestätigt
+                    </p>
+                  </div>
+                  
+                  {/* Zusätzliche Notizen */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Zusätzliche Notizen zur Qualitätsprüfung (optional)
+                    </label>
+                    <textarea
+                      value={qualityNotes}
+                      onChange={(e) => setQualityNotes(e.target.value)}
+                      placeholder="z.B. Besondere Auffälligkeiten, durchgeführte Tests, Garantiehinweise..."
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
+                      rows="3"
+                    />
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowQualityCheck(false);
+                        resetQualityCheck();
+                      }}
+                      className="px-6 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      onClick={handleQualityCheckSubmit}
+                      disabled={!isQualityCheckPassed()}
+                      className={`px-6 py-3 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
+                        isQualityCheckPassed()
+                          ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {isQualityCheckPassed() 
+                        ? '✅ Als verkaufsbereit markieren' 
+                        : `Noch ${getQualityCheckItems().length - Object.values(qualityChecklist).filter(Boolean).length} Punkte bestätigen`
+                      }
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Header - Mobile optimized */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
@@ -377,10 +630,26 @@ const DeviceDetails = () => {
                       key={st}
                       className={`px-3 py-2 rounded text-sm font-medium transition duration-200 ${
                         device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]
+                      } ${
+                        // NEU: Visueller Hinweis für Qualitätsprüfung
+                        st === 'verkaufsbereit' && device.status === 'in_reparatur' 
+                          ? 'ring-2 ring-green-300 ring-opacity-50' 
+                          : ''
                       }`}
                       onClick={() => handleStatusChange(st)}
+                      title={
+                        st === 'verkaufsbereit' && device.status === 'in_reparatur'
+                          ? 'Qualitätsprüfung erforderlich'
+                          : ''
+                      }
                     >
-                      {getStatusLabel(st)}
+                      {st === 'verkaufsbereit' && device.status === 'in_reparatur' ? (
+                        <span className="flex items-center">
+                          🔍 {getStatusLabel(st)}
+                        </span>
+                      ) : (
+                        getStatusLabel(st)
+                      )}
                     </button>
                   ))}
                 </div>
@@ -675,10 +944,27 @@ const DeviceDetails = () => {
                       key={st}
                       className={`px-3 py-2 rounded text-sm font-medium transition duration-200 ${
                         device.status === st ? statusActiveColorMap[st] : statusInactiveColorMap[st]
+                      } ${
+                        // NEU: Visueller Hinweis für Qualitätsprüfung - Mobile
+                        st === 'verkaufsbereit' && device.status === 'in_reparatur' 
+                          ? 'ring-2 ring-green-300 ring-opacity-50' 
+                          : ''
                       }`}
                       onClick={() => handleStatusChange(st)}
+                      title={
+                        st === 'verkaufsbereit' && device.status === 'in_reparatur'
+                          ? 'Qualitätsprüfung erforderlich'
+                          : ''
+                      }
                     >
-                      {getStatusLabel(st)}
+                      {st === 'verkaufsbereit' && device.status === 'in_reparatur' ? (
+                        <span className="flex items-center justify-center">
+                          <span className="text-xs mr-1">🔍</span>
+                          {getStatusLabel(st)}
+                        </span>
+                      ) : (
+                        getStatusLabel(st)
+                      )}
                     </button>
                   ))}
                 </div>
