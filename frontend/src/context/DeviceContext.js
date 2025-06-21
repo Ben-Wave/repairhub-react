@@ -1,4 +1,4 @@
-// frontend/src/context/DeviceContext.js - KORRIGIERT für Admin-Token + getStats
+// frontend/src/context/DeviceContext.js - KORRIGIERT mit checkImei Funktion
 import React, { createContext, useReducer } from 'react';
 import axios from 'axios';
 import DeviceReducer from './DeviceReducer';
@@ -116,7 +116,7 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
-  // Get stats - HINZUGEFÜGT für Dashboard
+  // Get stats - für Dashboard
   const getStats = async () => {
     try {
       const token = getAuthToken();
@@ -144,7 +144,61 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
-  // Add device
+  // KORRIGIERT: checkImei Funktion - das ist was AddDevice.js erwartet
+  const checkImei = async (imei) => {
+    try {
+      dispatch({ type: 'SET_LOADING' });
+      
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Kein Authentifizierungs-Token gefunden');
+      }
+
+      const res = await axios.post('/api/devices/check-imei', { imei }, {
+        headers: getAuthHeaders()
+      });
+      
+      dispatch({
+        type: 'ADD_DEVICE',
+        payload: res.data
+      });
+      
+      return res.data;
+    } catch (error) {
+      console.error('Error checking IMEI:', error);
+      
+      let errorMessage = 'Fehler bei der IMEI-Überprüfung';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Nicht autorisiert. Bitte loggen Sie sich erneut ein.';
+        
+        // Token ungültig - weiterleiten zum Login
+        const adminToken = localStorage.getItem('adminToken');
+        const resellerToken = localStorage.getItem('resellerToken');
+        
+        if (adminToken) {
+          localStorage.removeItem('adminToken');
+          window.location.href = '/';
+        } else if (resellerToken) {
+          localStorage.removeItem('resellerToken');
+          window.location.href = '/reseller';
+        }
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Keine Berechtigung zum Hinzufügen von Geräten.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: errorMessage
+      });
+      
+      throw error;
+    }
+  };
+
+  // Add device (zusätzlich zur checkImei Funktion)
   const addDevice = async (deviceData) => {
     try {
       dispatch({ type: 'SET_LOADING' });
@@ -245,7 +299,8 @@ export const DeviceProvider = ({ children }) => {
         stats: state.stats,
         getDevices,
         getDevice,
-        getStats, // HINZUGEFÜGT
+        getStats,
+        checkImei, // HINZUGEFÜGT - das ist was AddDevice.js braucht
         addDevice,
         updateDevice,
         deleteDevice,

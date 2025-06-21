@@ -1,4 +1,4 @@
-// frontend/src/App.js - Erweitert mit Rollen-Support + ROUTING-FIX
+// frontend/src/App.js - Erweitert mit Rollen-Support + PurchaseGuide
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { DeviceProvider } from './context/DeviceContext';
@@ -13,6 +13,7 @@ import EditDevice from './components/devices/EditDevice';
 import PartsList from './components/parts/PartsList';
 import AddPart from './components/parts/AddPart';
 import PriceCalculator from './components/tools/PriceCalculator';
+import PurchaseGuide from './components/purchase/PurchaseGuide'; // NEU
 import FonedaySearch from './components/parts/FonedaySearch';
 import SyncSettings from './components/parts/SyncSettings';
 import NotFound from './components/pages/NotFound';
@@ -215,6 +216,13 @@ const AdminRoutes = ({ admin, onLogout }) => {
           <Route path="/devices/edit/:id" element={
             <ProtectedRoute requiredPermission="devices.edit">
               <EditDevice />
+            </ProtectedRoute>
+          } />
+          
+          {/* NEU: PurchaseGuide Route */}
+          <Route path="/purchase-guide" element={
+            <ProtectedRoute requiredPermission="devices.create">
+              <PurchaseGuide />
             </ProtectedRoute>
           } />
           

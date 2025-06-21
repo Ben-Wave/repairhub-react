@@ -124,6 +124,110 @@ app.post('/api/devices/check-imei', authenticateToken, requirePermission('device
   }
 });
 
+// NEU: Vollständiges Gerät erstellen (für PurchaseGuide) - benötigt devices.create
+app.post('/api/devices', authenticateToken, requirePermission('devices', 'create'), async (req, res) => {
+  try {
+    const deviceData = req.body;
+
+    // Validierung der erweiterten Daten
+    if (!deviceData.imei) {
+      return res.status(400).json({ error: 'IMEI ist erforderlich' });
+    }
+
+    // Prüfen ob IMEI bereits existiert
+    const existingDevice = await Device.findOne({ imei: deviceData.imei });
+    if (existingDevice) {
+      return res.status(400).json({ error: 'Gerät mit dieser IMEI existiert bereits' });
+    }
+
+    // Erweiterte Validierung für PurchaseGuide-Daten
+    if (deviceData.batteryInfo?.health !== undefined) {
+      if (deviceData.batteryInfo.health < 0 || deviceData.batteryInfo.health > 100) {
+        return res.status(400).json({ error: 'Akkugesundheit muss zwischen 0 und 100% liegen' });
+      }
+    }
+
+    if (deviceData.physicalCondition?.overallGrade) {
+      const validGrades = ['A+', 'A', 'B', 'C', 'D'];
+      if (!validGrades.includes(deviceData.physicalCondition.overallGrade)) {
+        return res.status(400).json({ error: 'Ungültige Gesamtnote' });
+      }
+    }
+
+    // Automatische Verkaufspreisberechnung
+    if (deviceData.parts && deviceData.purchasePrice !== undefined && deviceData.desiredProfit !== undefined) {
+      const partsTotal = deviceData.parts.reduce((sum, part) => sum + (part.price || 0), 0);
+      deviceData.sellingPrice = deviceData.purchasePrice + partsTotal + deviceData.desiredProfit;
+    }
+
+    // Automatische Marktbewertung (vereinfacht)
+    if (deviceData.marketValuation && deviceData.model) {
+      if (!deviceData.marketValuation.estimatedMarketValue) {
+        // Basis-Preise nach Modell (vereinfacht - könnte aus externer API kommen)
+        const basePrices = {
+          'iPhone 15': 800,
+          'iPhone 14': 650,
+          'iPhone 13': 500,
+          'iPhone 12': 350,
+          'iPhone 11': 250
+        };
+        
+        const modelKey = Object.keys(basePrices).find(key => 
+          deviceData.model.includes(key)
+        );
+        
+        if (modelKey) {
+          let basePrice = basePrices[modelKey];
+          
+          // Speicher-Adjustierung
+          if (deviceData.model.includes('256GB')) basePrice *= 1.15;
+          if (deviceData.model.includes('512GB')) basePrice *= 1.3;
+          if (deviceData.model.includes('1TB')) basePrice *= 1.5;
+          
+          deviceData.marketValuation.estimatedMarketValue = basePrice;
+        }
+      }
+    }
+
+    // Standard-Status und Datum setzen falls nicht vorhanden
+    if (!deviceData.status) {
+      deviceData.status = 'gekauft';
+    }
+    
+    if (!deviceData.purchaseDate) {
+      deviceData.purchaseDate = new Date();
+    }
+
+    // Gerät erstellen
+    const newDevice = new Device(deviceData);
+    await newDevice.save();
+
+    // Teile-Bestand aktualisieren falls Teile verwendet wurden
+    if (deviceData.parts && deviceData.parts.length > 0) {
+      for (const part of deviceData.parts) {
+        await Part.findOneAndUpdate(
+          { partNumber: part.partNumber },
+          { $inc: { stock: -1 } }
+        );
+      }
+    }
+
+    res.status(201).json(newDevice);
+
+  } catch (error) {
+    console.error('Fehler beim Erstellen des Geräts:', error);
+    
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Gerät mit dieser IMEI existiert bereits' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Serverfehler beim Erstellen des Geräts', 
+      message: error.message 
+    });
+  }
+});
+
 // Alle Geräte abrufen - benötigt devices.view
 app.get('/api/devices', authenticateToken, requirePermission('devices', 'view'), async (req, res) => {
   try {
@@ -144,6 +248,38 @@ app.get('/api/devices/:id', authenticateToken, requirePermission('devices', 'vie
     res.json(device);
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Abrufen des Geräts' });
+  }
+});
+
+// NEU: Erweiterte Geräteinformationen abrufen - benötigt devices.view
+app.get('/api/devices/:id/extended', authenticateToken, requirePermission('devices', 'view'), async (req, res) => {
+  try {
+    const device = await Device.findById(req.params.id);
+    if (!device) {
+      return res.status(404).json({ error: 'Gerät nicht gefunden' });
+    }
+
+    // Erweiterte Informationen zusammenstellen
+    const extendedInfo = {
+      basic: {
+        imei: device.imei,
+        model: device.model,
+        status: device.status,
+        purchasePrice: device.purchasePrice,
+        sellingPrice: device.sellingPrice
+      },
+      battery: device.batteryInfo || {},
+      functional: device.functionalStatus || {},
+      physical: device.physicalCondition || {},
+      software: device.softwareInfo || {},
+      quality: device.qualityAssessment || {},
+      market: device.marketValuation || {},
+      purchase: device.purchaseInfo || {}
+    };
+
+    res.json(extendedInfo);
+  } catch (error) {
+    res.status(500).json({ error: 'Fehler beim Abrufen der erweiterten Geräteinformationen' });
   }
 });
 
@@ -214,6 +350,101 @@ app.put('/api/devices/:id', authenticateToken, requirePermission('devices', 'edi
     res.json(device);
   } catch (error) {
     res.status(500).json({ error: 'Fehler beim Aktualisieren des Geräts' });
+  }
+});
+
+// NEU: Marktpreis-Update für Gerät - benötigt devices.edit
+app.patch('/api/devices/:id/update-market-value', authenticateToken, requirePermission('devices', 'edit'), async (req, res) => {
+  try {
+    const { estimatedMarketValue, source } = req.body;
+    
+    if (!estimatedMarketValue || estimatedMarketValue <= 0) {
+      return res.status(400).json({ error: 'Gültiger Marktwert erforderlich' });
+    }
+
+    const device = await Device.findById(req.params.id);
+    if (!device) {
+      return res.status(404).json({ error: 'Gerät nicht gefunden' });
+    }
+
+    // Marktbewertung aktualisieren
+    if (!device.marketValuation) {
+      device.marketValuation = {};
+    }
+
+    // Preishistorie speichern
+    if (!device.marketValuation.priceHistory) {
+      device.marketValuation.priceHistory = [];
+    }
+
+    device.marketValuation.priceHistory.push({
+      date: new Date(),
+      price: estimatedMarketValue,
+      source: source || 'manual'
+    });
+
+    device.marketValuation.estimatedMarketValue = estimatedMarketValue;
+    device.marketValuation.valuationDate = new Date();
+    device.marketValuation.marketSource = source || 'manual';
+
+    await device.save();
+
+    res.json({
+      message: 'Marktwert erfolgreich aktualisiert',
+      newMarketValue: estimatedMarketValue,
+      device: {
+        id: device._id,
+        model: device.model,
+        marketValuation: device.marketValuation
+      }
+    });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Marktwerts:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Marktwerts' });
+  }
+});
+
+// NEU: Akku-Austausch Empfehlungen - benötigt devices.view
+app.get('/api/devices/battery-replacement-needed', authenticateToken, requirePermission('devices', 'view'), async (req, res) => {
+  try {
+    const devicesNeedingBatteryReplacement = await Device.find({
+      $or: [
+        { 'batteryInfo.health': { $lt: 80 } },
+        { 'batteryInfo.needsReplacement': true }
+      ],
+      status: { $ne: 'verkauft' }
+    }).select('imei model batteryInfo.health physicalCondition.overallGrade purchasePrice sellingPrice');
+
+    const recommendations = devicesNeedingBatteryReplacement.map(device => {
+      // Geschätzte Kosten für Akkutausch (könnte aus Parts-Datenbank kommen)
+      const batteryReplacementCost = 35; // Standardwert
+      const potentialValueIncrease = 50; // Geschätzter Wertzuwachs
+      
+      return {
+        deviceId: device._id,
+        imei: device.imei,
+        model: device.model,
+        currentBatteryHealth: device.batteryInfo?.health || 0,
+        overallGrade: device.physicalCondition?.overallGrade || 'Unknown',
+        estimatedReplacementCost: batteryReplacementCost,
+        potentialValueIncrease: potentialValueIncrease,
+        profitPotential: potentialValueIncrease - batteryReplacementCost,
+        priority: device.batteryInfo?.health < 70 ? 'high' : 'medium'
+      };
+    });
+
+    // Sortiere nach Profit-Potenzial
+    recommendations.sort((a, b) => b.profitPotential - a.profitPotential);
+
+    res.json({
+      total: recommendations.length,
+      highPriority: recommendations.filter(r => r.priority === 'high').length,
+      totalPotentialProfit: recommendations.reduce((sum, r) => sum + r.profitPotential, 0),
+      recommendations: recommendations.slice(0, 20) // Top 20
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Akku-Austausch Empfehlungen:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Akku-Austausch Empfehlungen' });
   }
 });
 
@@ -376,7 +607,7 @@ app.delete('/api/parts/:id', authenticateToken, requirePermission('parts', 'dele
   }
 });
 
-// ===== GESCHÜTZTE STATISTIK-ROUTE =====
+// ===== GESCHÜTZTE STATISTIK-ROUTES =====
 
 // Statistik-Route - benötigt system.statistics
 app.get('/api/stats', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
@@ -418,6 +649,104 @@ app.get('/api/stats', authenticateToken, requirePermission('system', 'statistics
   } catch (error) {
     console.error('Fehler beim Abrufen der Statistiken:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Statistiken' });
+  }
+});
+
+// NEU: Geräte-Statistiken nach Ankaufsmethode - benötigt system.statistics
+app.get('/api/stats/purchase-methods', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
+  try {
+    const stats = await Device.aggregate([
+      {
+        $group: {
+          _id: '$purchaseInfo.method',
+          count: { $sum: 1 },
+          avgPurchasePrice: { $avg: '$purchasePrice' },
+          avgSellingPrice: { $avg: '$sellingPrice' },
+          avgBatteryHealth: { $avg: '$batteryInfo.health' }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      }
+    ]);
+
+    // Zusätzliche Statistiken
+    const guidedPurchases = await Device.countDocuments({ 'purchaseInfo.method': 'guided' });
+    const manualPurchases = await Device.countDocuments({ 'purchaseInfo.method': 'manual' });
+    const totalDevices = await Device.countDocuments();
+
+    const summary = {
+      byMethod: stats,
+      summary: {
+        totalDevices,
+        guidedPurchases,
+        manualPurchases,
+        guidedPercentage: totalDevices > 0 ? (guidedPurchases / totalDevices * 100).toFixed(1) : 0
+      }
+    };
+
+    res.json(summary);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Ankaufs-Statistiken:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Ankaufs-Statistiken' });
+  }
+});
+
+// NEU: Qualitäts-Trends abrufen - benötigt system.statistics
+app.get('/api/stats/quality-trends', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
+  try {
+    const qualityStats = await Device.aggregate([
+      {
+        $match: {
+          'physicalCondition.overallGrade': { $exists: true },
+          'batteryInfo.health': { $exists: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$physicalCondition.overallGrade',
+          count: { $sum: 1 },
+          avgBatteryHealth: { $avg: '$batteryInfo.health' },
+          avgPurchasePrice: { $avg: '$purchasePrice' },
+          avgSellingPrice: { $avg: '$sellingPrice' }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
+    // Akkugesundheits-Verteilung
+    const batteryDistribution = await Device.aggregate([
+      {
+        $match: { 'batteryInfo.health': { $exists: true } }
+      },
+      {
+        $bucket: {
+          groupBy: '$batteryInfo.health',
+          boundaries: [0, 70, 80, 85, 90, 95, 100],
+          default: 'unknown',
+          output: {
+            count: { $sum: 1 },
+            avgPrice: { $avg: '$purchasePrice' }
+          }
+        }
+      }
+    ]);
+
+    res.json({
+      qualityGrades: qualityStats,
+      batteryDistribution,
+      insights: {
+        totalWithQualityData: qualityStats.reduce((sum, item) => sum + item.count, 0),
+        mostCommonGrade: qualityStats.length > 0 ? qualityStats.reduce((prev, current) => 
+          current.count > prev.count ? current : prev
+        ) : null
+      }
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Qualitäts-Trends:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Qualitäts-Trends' });
   }
 });
 
