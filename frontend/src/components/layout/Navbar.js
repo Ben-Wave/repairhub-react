@@ -41,6 +41,13 @@ const Navbar = ({ admin, onLogout }) => {
     }
   };
 
+  const closeMobileMenu = () => {
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenu) {
+      mobileMenu.classList.add('hidden');
+    }
+  };
+
   const hasPermission = (category, permission) => {
     if (userRole === 'super_admin') return true;
     if (!userPermissions) return false;
@@ -260,6 +267,7 @@ const Navbar = ({ admin, onLogout }) => {
             {hasPermission('system', 'statistics') && (
               <Link 
                 to="/" 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive('/') ? 'bg-blue-800' : ''
                 }`}
@@ -272,6 +280,7 @@ const Navbar = ({ admin, onLogout }) => {
             {hasPermission('devices', 'view') && (
               <Link 
                 to="/devices" 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive('/devices') ? 'bg-blue-800' : ''
                 }`}
@@ -284,6 +293,7 @@ const Navbar = ({ admin, onLogout }) => {
             {hasPermission('parts', 'view') && (
               <Link 
                 to="/parts" 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive('/parts') ? 'bg-blue-800' : ''
                 }`}
@@ -296,6 +306,7 @@ const Navbar = ({ admin, onLogout }) => {
             {hasPermission('resellers', 'view') && (
               <Link 
                 to="/admin/resellers" 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive('/admin/resellers') ? 'bg-blue-800' : ''
                 }`}
@@ -308,6 +319,7 @@ const Navbar = ({ admin, onLogout }) => {
             {hasPermission('system', 'userManagement') && (
               <Link 
                 to="/admin/users" 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive('/admin/users') ? 'bg-blue-800' : ''
                 }`}
@@ -321,6 +333,7 @@ const Navbar = ({ admin, onLogout }) => {
               <Link 
                 key={item.path}
                 to={item.path} 
+                onClick={closeMobileMenu}
                 className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
                   isActive(item.path) ? 'bg-blue-800' : ''
                 }`}
@@ -340,7 +353,10 @@ const Navbar = ({ admin, onLogout }) => {
                 </div>
               )}
               <button
-                onClick={handleLogout}
+                onClick={() => {
+                  closeMobileMenu();
+                  handleLogout();
+                }}
                 className="w-full text-left bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-base font-medium transition duration-200"
               >
                 Abmelden
