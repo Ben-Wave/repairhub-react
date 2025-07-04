@@ -1,4 +1,4 @@
-// frontend/src/App.js - Erweitert mit Rollen-Support + PurchaseGuide
+// frontend/src/App.js - Erweitert mit Rollen-Support + PurchaseGuide + REGISTRIERUNG
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { DeviceProvider } from './context/DeviceContext';
@@ -13,13 +13,15 @@ import EditDevice from './components/devices/EditDevice';
 import PartsList from './components/parts/PartsList';
 import AddPart from './components/parts/AddPart';
 import PriceCalculator from './components/tools/PriceCalculator';
-import PurchaseGuide from './components/purchase/PurchaseGuide'; // NEU
+import PurchaseGuide from './components/purchase/PurchaseGuide';
 import FonedaySearch from './components/parts/FonedaySearch';
 import SyncSettings from './components/parts/SyncSettings';
 import NotFound from './components/pages/NotFound';
 import ResellerApp from './components/reseller/ResellerApp';
 import ResellerManagement from './components/admin/ResellerManagement';
 import UserManagement from './components/admin/UserManagement';
+import RegisterPage from './components/pages/RegisterPage';
+import RegisterResellerPage from './components/pages/RegisterResellerPage';
 import axios from 'axios';
 import './App.css';
 
@@ -219,7 +221,7 @@ const AdminRoutes = ({ admin, onLogout }) => {
             </ProtectedRoute>
           } />
           
-          {/* NEU: PurchaseGuide Route */}
+          {/* PurchaseGuide Route */}
           <Route path="/purchase-guide" element={
             <ProtectedRoute requiredPermission="devices.create">
               <PurchaseGuide />
@@ -311,7 +313,11 @@ function App() {
         <Router>
           <div className="App">
             <Routes>
-              {/* ROUTING-FIX: /reseller* → /reseller/* */}
+              {/* NEU: Registrierungsseiten - ÖFFENTLICH zugänglich */}
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/register-reseller" element={<RegisterResellerPage />} />
+              
+              {/* Reseller Routes */}
               <Route path="/reseller/*" element={<ResellerApp />} />
               
               {/* Admin Routes - geschützt vor Reseller-Zugriff UND mit Admin Login */}

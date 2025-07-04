@@ -1,13 +1,198 @@
-// backend/routes/admin-reseller.js - ERWEITERT mit Löschen/Deaktivieren
+// backend/routes/admin-reseller.js - ERWEITERT mit E-Mail-Einladungen
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { Reseller, DeviceAssignment, Device } = require('../models');
+const crypto = require('crypto');
+const { Reseller, DeviceAssignment, Device, InviteToken } = require('../models');
+const emailService = require('../services/emailService');
 const router = express.Router();
+const adminAuth = require('../middleware/adminAuth');
 
-// TODO: Hier könnten Sie ein Admin-Auth Middleware hinzufügen
-// const adminAuth = require('../middleware/adminAuth');
+// NEU: Reseller über E-Mail einladen (moderne Variante)
+router.post('/invite-reseller', adminAuth, async (req, res) => {
+  try {
+    const { email, name, company, phone } = req.body;
 
-// Neuen Reseller erstellen (ERWEITERT)
+    // Validierung
+    if (!email) {
+      return res.status(400).json({ error: 'E-Mail-Adresse ist erforderlich' });
+    }
+
+    // E-Mail-Format prüfen
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+    }
+
+    // Prüfen ob E-Mail bereits als Reseller existiert
+    const existingReseller = await Reseller.findOne({ email });
+    if (existingReseller) {
+      return res.status(400).json({ error: 'Reseller mit dieser E-Mail existiert bereits' });
+    }
+
+    // Prüfen ob bereits eine offene Einladung existiert
+    const existingInvite = await InviteToken.findOne({ 
+      email, 
+      type: 'reseller', // NEU: Typ unterscheiden
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    });
+    
+    if (existingInvite) {
+      return res.status(400).json({ 
+        error: 'Für diese E-Mail existiert bereits eine offene Reseller-Einladung',
+        expiresAt: existingInvite.expiresAt
+      });
+    }
+
+    // Token und Ablaufzeit generieren
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 Stunden
+
+    // Neue Einladung erstellen
+    const inviteToken = new InviteToken({
+      email,
+      token: token,
+      name: name || null,
+      type: 'reseller', // NEU: Typ setzen
+      // Reseller-spezifische Daten
+      resellerData: {
+        company: company || null,
+        phone: phone || null
+      },
+      createdBy: req.admin._id,
+      expiresAt: expiresAt
+    });
+
+    console.log('📧 Erstelle Reseller-InviteToken mit:', {
+      email,
+      token: token.substring(0, 8) + '...',
+      expiresAt,
+      type: 'reseller'
+    });
+
+    await inviteToken.save();
+
+    console.log('✅ Reseller-InviteToken erfolgreich erstellt');
+
+    // E-Mail senden
+    const emailResult = await emailService.sendResellerInvitation(email, token, name, company);
+    
+    if (!emailResult.success) {
+      console.error('❌ E-Mail-Versand fehlgeschlagen:', emailResult.error);
+      // Falls E-Mail fehlschlägt, Einladung löschen
+      await InviteToken.findByIdAndDelete(inviteToken._id);
+      return res.status(500).json({ 
+        error: 'Fehler beim Senden der Einladungs-E-Mail',
+        details: emailResult.error 
+      });
+    }
+
+    console.log('✅ Reseller-E-Mail erfolgreich gesendet');
+
+    res.status(201).json({
+      message: 'Reseller-Einladung erfolgreich gesendet',
+      invite: {
+        id: inviteToken._id,
+        email: inviteToken.email,
+        name: inviteToken.name,
+        company: inviteToken.resellerData?.company,
+        expiresAt: inviteToken.expiresAt,
+        createdAt: inviteToken.createdAt
+      },
+      emailSent: true,
+      messageId: emailResult.messageId
+    });
+
+  } catch (error) {
+    console.error('❌ Fehler beim Senden der Reseller-Einladung:', error);
+    res.status(500).json({ error: 'Fehler beim Senden der Reseller-Einladung' });
+  }
+});
+
+// NEU: Reseller-Einladungen abrufen
+router.get('/invites', async (req, res) => {
+  try {
+    const invites = await InviteToken.find({ 
+      type: 'reseller',
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    })
+    .populate('createdBy', 'name username')
+    .sort({ createdAt: -1 });
+
+    res.json(invites);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Reseller-Einladungen:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Reseller-Einladungen' });
+  }
+});
+
+// NEU: Reseller-Einladung erneut senden
+router.post('/resend-invite/:inviteId', async (req, res) => {
+  try {
+    const invite = await InviteToken.findById(req.params.inviteId);
+    
+    if (!invite || invite.type !== 'reseller') {
+      return res.status(404).json({ error: 'Reseller-Einladung nicht gefunden' });
+    }
+
+    if (invite.isUsed) {
+      return res.status(400).json({ error: 'Einladung wurde bereits verwendet' });
+    }
+
+    if (invite.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Einladung ist abgelaufen' });
+    }
+
+    // E-Mail erneut senden
+    const emailResult = await emailService.sendResellerInvitation(
+      invite.email, 
+      invite.token, 
+      invite.name, 
+      invite.resellerData?.company
+    );
+    
+    if (!emailResult.success) {
+      return res.status(500).json({ 
+        error: 'Fehler beim erneuten Senden der E-Mail',
+        details: emailResult.error 
+      });
+    }
+
+    res.json({
+      message: 'Reseller-Einladung erfolgreich erneut gesendet',
+      messageId: emailResult.messageId
+    });
+
+  } catch (error) {
+    console.error('Fehler beim erneuten Senden der Reseller-Einladung:', error);
+    res.status(500).json({ error: 'Fehler beim erneuten Senden der Reseller-Einladung' });
+  }
+});
+
+// NEU: Reseller-Einladung widerrufen
+router.delete('/invites/:inviteId', async (req, res) => {
+  try {
+    const invite = await InviteToken.findById(req.params.inviteId);
+    
+    if (!invite || invite.type !== 'reseller') {
+      return res.status(404).json({ error: 'Reseller-Einladung nicht gefunden' });
+    }
+
+    if (invite.isUsed) {
+      return res.status(400).json({ error: 'Einladung wurde bereits verwendet und kann nicht widerrufen werden' });
+    }
+
+    await InviteToken.findByIdAndDelete(req.params.inviteId);
+
+    res.json({ message: 'Reseller-Einladung erfolgreich widerrufen' });
+  } catch (error) {
+    console.error('Fehler beim Widerrufen der Reseller-Einladung:', error);
+    res.status(500).json({ error: 'Fehler beim Widerrufen der Reseller-Einladung' });
+  }
+});
+
+// Neuen Reseller erstellen (alte Methode - für Kompatibilität)
 router.post('/resellers', async (req, res) => {
   try {
     const { username, email, name, company, phone } = req.body;
@@ -21,7 +206,7 @@ router.post('/resellers', async (req, res) => {
       return res.status(400).json({ error: 'Username oder Email bereits vergeben' });
     }
 
-    // NEU: Passwort ist der Username (temporär)
+    // Passwort ist der Username (temporär)
     const tempPassword = username;
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -32,7 +217,6 @@ router.post('/resellers', async (req, res) => {
       name,
       company,
       phone,
-      // NEU: Muss Passwort bei erstem Login ändern
       mustChangePassword: true,
       firstLogin: true
     });
@@ -42,8 +226,6 @@ router.post('/resellers', async (req, res) => {
     // Passwort aus Response entfernen
     const resellerResponse = newReseller.toObject();
     delete resellerResponse.password;
-
-    // NEU: Temporäres Passwort in Response für Admin
     resellerResponse.temporaryPassword = tempPassword;
 
     res.status(201).json(resellerResponse);
@@ -53,22 +235,143 @@ router.post('/resellers', async (req, res) => {
   }
 });
 
-// NEU: Reseller deaktivieren/aktivieren
+// NEU: Reseller-Registrierung vervollständigen
+router.post('/complete-registration', async (req, res) => {
+  try {
+    const { token, username, password, name, company, phone } = req.body;
+
+    // Validierung
+    if (!token || !username || !password) {
+      return res.status(400).json({ error: 'Token, Username und Passwort sind erforderlich' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+
+    // Token validieren
+    const invite = await InviteToken.findOne({ token, type: 'reseller' });
+
+    if (!invite || invite.isUsed || invite.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Ungültiger oder abgelaufener Einladungslink' });
+    }
+
+    // Prüfen ob Username bereits existiert
+    const existingUsername = await Reseller.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({ error: 'Username bereits vergeben' });
+    }
+
+    // Prüfen ob E-Mail bereits als Reseller existiert
+    const existingEmail = await Reseller.findOne({ email: invite.email });
+    if (existingEmail) {
+      return res.status(400).json({ error: 'Reseller mit dieser E-Mail existiert bereits' });
+    }
+
+    // Passwort hashen
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Neuen Reseller erstellen
+    const newReseller = new Reseller({
+      username,
+      email: invite.email,
+      password: hashedPassword,
+      name: name || invite.name || username,
+      company: company || invite.resellerData?.company || '',
+      phone: phone || invite.resellerData?.phone || '',
+      mustChangePassword: false,
+      firstLogin: false,
+      lastPasswordChange: new Date(),
+      isActive: true
+    });
+
+    await newReseller.save();
+
+    // Einladung als verwendet markieren
+    invite.isUsed = true;
+    invite.usedAt = new Date();
+    await invite.save();
+
+    // Antwort ohne Passwort
+    const resellerResponse = newReseller.toObject();
+    delete resellerResponse.password;
+
+    res.status(201).json({
+      message: 'Reseller-Registrierung erfolgreich abgeschlossen',
+      reseller: resellerResponse
+    });
+
+  } catch (error) {
+    console.error('Fehler bei der Reseller-Registrierung:', error);
+    res.status(500).json({ error: 'Fehler bei der Reseller-Registrierung' });
+  }
+});
+
+// NEU: Reseller-Token validieren (für Frontend)
+router.get('/validate-invite/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token erforderlich' });
+    }
+
+    const invite = await InviteToken.findOne({ token, type: 'reseller' });
+
+    if (!invite) {
+      return res.status(404).json({ error: 'Ungültiger Einladungslink' });
+    }
+
+    if (invite.isUsed) {
+      return res.status(400).json({ 
+        error: 'Einladung wurde bereits verwendet',
+        usedAt: invite.usedAt
+      });
+    }
+
+    if (invite.expiresAt < new Date()) {
+      return res.status(400).json({ 
+        error: 'Einladungslink ist abgelaufen',
+        expiredAt: invite.expiresAt
+      });
+    }
+
+    // Prüfen ob bereits ein Reseller mit dieser E-Mail existiert
+    const existingReseller = await Reseller.findOne({ email: invite.email });
+    if (existingReseller) {
+      return res.status(400).json({ error: 'Reseller mit dieser E-Mail existiert bereits' });
+    }
+
+    // Token ist gültig - Informationen für Registrierung zurückgeben
+    res.json({
+      valid: true,
+      email: invite.email,
+      name: invite.name,
+      company: invite.resellerData?.company,
+      phone: invite.resellerData?.phone,
+      expiresAt: invite.expiresAt,
+      timeRemaining: invite.expiresAt - new Date()
+    });
+
+  } catch (error) {
+    console.error('Fehler bei Reseller-Token-Validierung:', error);
+    res.status(500).json({ error: 'Fehler bei der Token-Validierung' });
+  }
+});
+
+// Reseller deaktivieren/aktivieren (bestehend)
 router.patch('/resellers/:resellerId/toggle-active', async (req, res) => {
   try {
     const { resellerId } = req.params;
     const { reason } = req.body;
 
-    // Reseller finden
     const reseller = await Reseller.findById(resellerId);
     if (!reseller) {
       return res.status(404).json({ error: 'Reseller nicht gefunden' });
     }
 
-    // Status umschalten
     const newStatus = !reseller.isActive;
     
-    // Bei Deaktivierung prüfen ob aktive Zuweisungen existieren
     if (!newStatus) {
       const activeAssignments = await DeviceAssignment.find({
         resellerId: resellerId,
@@ -87,15 +390,12 @@ router.patch('/resellers/:resellerId/toggle-active', async (req, res) => {
       }
     }
 
-    // Status aktualisieren
     reseller.isActive = newStatus;
     reseller.updatedAt = new Date();
     await reseller.save();
 
-    // Log-Eintrag (optional - könnte in separater Audit-Tabelle gespeichert werden)
     console.log(`Reseller ${reseller.username} wurde ${newStatus ? 'aktiviert' : 'deaktiviert'}. Grund: ${reason || 'Kein Grund angegeben'}`);
 
-    // Antwort ohne Passwort
     const resellerResponse = reseller.toObject();
     delete resellerResponse.password;
 
@@ -110,27 +410,23 @@ router.patch('/resellers/:resellerId/toggle-active', async (req, res) => {
   }
 });
 
-// NEU: Reseller löschen (mit Sicherheitsprüfungen)
+// Reseller löschen (bestehend)
 router.delete('/resellers/:resellerId', async (req, res) => {
   try {
     const { resellerId } = req.params;
     const { confirmDeletion, reason } = req.body;
 
-    // Bestätigung prüfen
     if (!confirmDeletion) {
       return res.status(400).json({ error: 'Löschung muss explizit bestätigt werden' });
     }
 
-    // Reseller finden
     const reseller = await Reseller.findById(resellerId);
     if (!reseller) {
       return res.status(404).json({ error: 'Reseller nicht gefunden' });
     }
 
-    // Alle Zuweisungen des Resellers abrufen
     const allAssignments = await DeviceAssignment.find({ resellerId }).populate('deviceId', 'imei model status');
     
-    // Aktive Zuweisungen prüfen
     const activeAssignments = allAssignments.filter(a => a.status === 'assigned' || a.status === 'received');
     if (activeAssignments.length > 0) {
       return res.status(400).json({ 
@@ -144,11 +440,8 @@ router.delete('/resellers/:resellerId', async (req, res) => {
       });
     }
 
-    // Verkaufte Geräte prüfen (Warnung, aber nicht blockierend)
     const soldAssignments = allAssignments.filter(a => a.status === 'sold');
     
-    // WICHTIG: Alle Zuweisungen des Resellers als "deleted_reseller" markieren
-    // statt sie zu löschen, um Datenintegrität zu wahren
     await DeviceAssignment.updateMany(
       { resellerId },
       { 
@@ -159,17 +452,14 @@ router.delete('/resellers/:resellerId', async (req, res) => {
       }
     );
 
-    // Geräte von gelöschten aktiven Zuweisungen zurücksetzen (falls welche übersehen wurden)
     for (const assignment of activeAssignments) {
       await Device.findByIdAndUpdate(assignment.deviceId._id, {
         status: 'verkaufsbereit'
       });
     }
 
-    // Reseller löschen
     await Reseller.findByIdAndDelete(resellerId);
 
-    // Log-Eintrag
     console.log(`Reseller ${reseller.username} (${reseller.name}) wurde gelöscht. Grund: ${reason || 'Kein Grund angegeben'}. Betroffene Zuweisungen: ${allAssignments.length}`);
 
     res.json({
@@ -189,12 +479,11 @@ router.delete('/resellers/:resellerId', async (req, res) => {
   }
 });
 
-// Gerät einem Reseller zuweisen (ERWEITERT)
+// Gerät einem Reseller zuweisen (bestehend)
 router.post('/assign-device', async (req, res) => {
   try {
     const { deviceId, resellerId, minimumPrice } = req.body;
 
-    // Prüfen ob Gerät existiert und verfügbar ist
     const device = await Device.findById(deviceId);
     if (!device) {
       return res.status(404).json({ error: 'Gerät nicht gefunden' });
@@ -204,7 +493,6 @@ router.post('/assign-device', async (req, res) => {
       return res.status(400).json({ error: 'Gerät bereits verkauft' });
     }
 
-    // Prüfen ob Reseller existiert UND aktiv ist
     const reseller = await Reseller.findById(resellerId);
     if (!reseller) {
       return res.status(404).json({ error: 'Reseller nicht gefunden' });
@@ -214,7 +502,6 @@ router.post('/assign-device', async (req, res) => {
       return res.status(400).json({ error: 'Reseller ist nicht aktiv und kann keine Geräte erhalten' });
     }
 
-    // Prüfen ob bereits zugewiesen
     const existingAssignment = await DeviceAssignment.findOne({ 
       deviceId, 
       status: { $ne: 'returned' } 
@@ -226,12 +513,11 @@ router.post('/assign-device', async (req, res) => {
     const assignment = new DeviceAssignment({
       deviceId,
       resellerId,
-      minimumPrice // Das ist jetzt der Mindestverkaufspreis = Repairhub-Gewinn
+      minimumPrice
     });
 
     await assignment.save();
 
-    // Gerätestatus aktualisieren
     device.status = 'zum_verkauf';
     await device.save();
 
@@ -241,7 +527,7 @@ router.post('/assign-device', async (req, res) => {
   }
 });
 
-// Alle Reseller abrufen (ERWEITERT - auch inaktive anzeigen)
+// Alle Reseller abrufen (bestehend)
 router.get('/resellers', async (req, res) => {
   try {
     const { includeInactive } = req.query;
@@ -255,7 +541,7 @@ router.get('/resellers', async (req, res) => {
   }
 });
 
-// Alle Zuweisungen abrufen (Admin-Übersicht)
+// Alle Zuweisungen abrufen (bestehend)
 router.get('/assignments', async (req, res) => {
   try {
     const assignments = await DeviceAssignment.find()
@@ -269,7 +555,7 @@ router.get('/assignments', async (req, res) => {
   }
 });
 
-// Verfügbare Geräte für Zuweisung abrufen
+// Verfügbare Geräte für Zuweisung abrufen (bestehend)
 router.get('/available-devices', async (req, res) => {
   try {
     const assignedDeviceIds = await DeviceAssignment.distinct('deviceId', {
@@ -287,7 +573,7 @@ router.get('/available-devices', async (req, res) => {
   }
 });
 
-// Gerät von Reseller entziehen
+// Gerät von Reseller entziehen (bestehend)
 router.patch('/assignments/:assignmentId/revoke', async (req, res) => {
   try {
     const { reason } = req.body;
@@ -308,13 +594,11 @@ router.patch('/assignments/:assignmentId/revoke', async (req, res) => {
       return res.status(400).json({ error: 'Verkaufte Geräte können nicht entzogen werden' });
     }
 
-    // Assignment als zurückgegeben markieren
     assignment.status = 'returned';
     assignment.notes = `GERÄT ENTZOGEN: ${reason}\n\nVorherige Notizen: ${assignment.notes || 'Keine'}`;
     assignment.updatedAt = new Date();
     await assignment.save();
 
-    // Gerätestatus zurücksetzen
     await Device.findByIdAndUpdate(assignment.deviceId._id, {
       status: 'verkaufsbereit'
     });

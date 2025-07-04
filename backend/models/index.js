@@ -1,4 +1,4 @@
-// backend/models/index.js - ERWEITERT für PurchaseGuide
+// backend/models/index.js - ERWEITERT für PurchaseGuide + InviteToken (User & Reseller)
 const mongoose = require('mongoose');
 
 // Erweiterte Device Schema mit umfassenden Ankaufsinformationen
@@ -350,13 +350,76 @@ const userRoleSchema = new mongoose.Schema({
     },
     tools: {
       priceCalculator: { type: Boolean, default: false },
-      purchaseGuide: { type: Boolean, default: false } // NEU
+      purchaseGuide: { type: Boolean, default: false }
     }
   },
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+});
+
+// NEU: InviteToken Schema für E-Mail-basierte Benutzer- UND Reseller-Einladungen
+const inviteTokenSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  token: { type: String, required: true, unique: true },
+  name: { type: String }, // Optional - falls Admin schon Name einträgt
+  
+  // NEU: Typ unterscheiden (user oder reseller)
+  type: { 
+    type: String, 
+    required: true,
+    enum: ['user', 'reseller'],
+    default: 'user'
+  },
+  
+  // Für User-Einladungen
+  role: { type: String, default: 'admin' },
+  roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserRole' },
+  
+  // NEU: Für Reseller-Einladungen
+  resellerData: {
+    company: { type: String },
+    phone: { type: String }
+  },
+  
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
+  expiresAt: { type: Date, required: true },
+  usedAt: { type: Date },
+  isUsed: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Compound Index für E-Mail + Typ (ein User kann nicht gleichzeitig User und Reseller sein)
+inviteTokenSchema.index({ email: 1, type: 1 }, { unique: true });
+inviteTokenSchema.index({ token: 1 });
+inviteTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Automatisches Löschen abgelaufener Tokens
+
+// Virtual für Token-Status
+inviteTokenSchema.virtual('isExpired').get(function() {
+  return new Date() > this.expiresAt;
+});
+
+// Virtual für verbleibende Zeit
+inviteTokenSchema.virtual('timeRemaining').get(function() {
+  const now = new Date();
+  const remaining = this.expiresAt - now;
+  return remaining > 0 ? remaining : 0;
+});
+
+// Middleware für automatische Token-Generierung
+inviteTokenSchema.pre('save', function(next) {
+  if (!this.token) {
+    const crypto = require('crypto');
+    this.token = crypto.randomBytes(32).toString('hex');
+  }
+  
+  if (!this.expiresAt) {
+    // Standard: 48 Stunden Gültigkeit
+    this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  }
+  
+  next();
 });
 
 // Export models (mit Schutz gegen OverwriteModelError)
@@ -368,4 +431,5 @@ module.exports = {
   DeviceAssignment: mongoose.models.DeviceAssignment || mongoose.model('DeviceAssignment', deviceAssignmentSchema),
   Admin: mongoose.models.Admin || mongoose.model('Admin', adminSchema),
   UserRole: mongoose.models.UserRole || mongoose.model('UserRole', userRoleSchema),
+  InviteToken: mongoose.models.InviteToken || mongoose.model('InviteToken', inviteTokenSchema)
 };
