@@ -1,4 +1,4 @@
-// frontend/src/components/reseller/DeviceCard.js
+// frontend/src/components/reseller/DeviceCard.js - ERWEITERT mit E-Mail-Integration
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -49,24 +49,34 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
     }
   };
 
+  // NEU: Erhalt bestätigen mit E-Mail-Benachrichtigung an Admin
   const confirmReceipt = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('resellerToken');
-      await axios.patch(`/api/reseller/devices/${assignmentId}/confirm-receipt`, 
+      
+      // Verwende die neue API-Route mit E-Mail-Benachrichtigung
+      await axios.post(`/api/admin/confirm-receipt/${assignmentId}`, 
         { notes },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
       setConfirmingReceipt(false);
       setNotes('');
+      
+      // Erfolgs-Nachricht mit E-Mail-Info
+      alert('✅ Erhalt erfolgreich bestätigt!\n\nDer Administrator wurde per E-Mail benachrichtigt und kann nun den Versand vorbereiten.');
+      
       onUpdate();
     } catch (error) {
-      alert('Fehler beim Bestätigen des Erhalts');
+      console.error('Fehler beim Bestätigen des Erhalts:', error);
+      alert('❌ Fehler beim Bestätigen des Erhalts: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
     } finally {
       setLoading(false);
     }
   };
 
+  // NEU: Verkauf melden mit E-Mail-Benachrichtigung an Admin
   const confirmSale = async () => {
     if (!salePrice || parseFloat(salePrice) < minimumPrice) {
       alert(`Verkaufspreis muss mindestens ${minimumPrice}€ betragen`);
@@ -76,24 +86,35 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('resellerToken');
-      await axios.patch(`/api/reseller/devices/${assignmentId}/confirm-sale`, 
+      
+      // Verwende die neue API-Route mit E-Mail-Benachrichtigung
+      const response = await axios.post(`/api/admin/report-sale/${assignmentId}`, 
         { 
-          actualSalePrice: parseFloat(salePrice),
+          salePrice: parseFloat(salePrice),
           notes 
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
       setConfirmingSale(false);
       setSalePrice('');
       setNotes('');
+      
+      const profit = parseFloat(salePrice) - minimumPrice;
+      
+      // Erfolgs-Nachricht mit Gewinn-Info und E-Mail-Bestätigung
+      alert(`🎉 Verkauf erfolgreich gemeldet!\n\nVerkaufspreis: ${salePrice}€\nIhr Gewinn: ${profit.toFixed(2)}€\n\nDer Administrator wurde per E-Mail mit einer detaillierten Gewinn-Aufschlüsselung benachrichtigt.`);
+      
       onUpdate();
     } catch (error) {
-      alert('Fehler beim Bestätigen des Verkaufs');
+      console.error('Fehler beim Bestätigen des Verkaufs:', error);
+      alert('❌ Fehler beim Melden des Verkaufs: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
     } finally {
       setLoading(false);
     }
   };
 
+  // ERWEITERT: Verkauf zurücknehmen (bestehende Funktion bleibt gleich)
   const reverseSale = async () => {
     if (!reverseReason || reverseReason.trim().length < 10) {
       alert('Bitte geben Sie einen ausführlichen Grund ein (mindestens 10 Zeichen)');
@@ -103,16 +124,21 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('resellerToken');
-      await axios.patch(`/api/reseller/devices/${assignmentId}/reverse-sale`, 
+      
+      // Verwende die neue API-Route
+      await axios.post(`/api/admin/reverse-sale/${assignmentId}`, 
         { reason: reverseReason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
       setReversingDialog(false);
       setReverseReason('');
       onUpdate();
-      alert('Verkauf wurde erfolgreich zurückgenommen');
+      
+      alert('↩️ Verkauf wurde erfolgreich zurückgenommen.\n\nDas Gerät kann erneut verkauft werden.');
     } catch (error) {
-      alert('Fehler beim Zurücknehmen des Verkaufs: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
+      console.error('Fehler beim Zurücknehmen des Verkaufs:', error);
+      alert('❌ Fehler beim Zurücknehmen des Verkaufs: ' + (error.response?.data?.error || 'Unbekannter Fehler'));
     } finally {
       setLoading(false);
     }
@@ -176,6 +202,25 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
             </div>
           )}
         </div>
+
+        {/* NEU: E-Mail-Status-Hinweise */}
+        {status === 'assigned' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-800">
+                  <strong>📧 E-Mail erhalten?</strong> Sie sollten eine E-Mail mit Gerätedetails erhalten haben. 
+                  Bestätigen Sie hier den Erhalt - der Admin wird automatisch benachrichtigt.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Expanded Details - Mobile optimized */}
         {showDetails && (
@@ -243,7 +288,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
               onClick={() => setConfirmingReceipt(true)}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
             >
-              Erhalt bestätigen
+              ✅ Erhalt bestätigen
             </button>
           )}
 
@@ -252,7 +297,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
               onClick={() => setConfirmingSale(true)}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
             >
-              Verkauf melden
+              💰 Verkauf melden
             </button>
           )}
 
@@ -266,11 +311,28 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
                   </div>
                 )}
               </div>
+              
+              {/* NEU: E-Mail-Bestätigung für verkaufte Geräte */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-green-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-green-800">
+                      <strong>📧 Admin benachrichtigt:</strong> Der Administrator wurde per E-Mail über den Verkauf informiert und erhielt eine detaillierte Gewinn-Aufschlüsselung.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               <button
                 onClick={() => setReversingDialog(true)}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition duration-200"
               >
-                Verkauf zurücknehmen
+                ↩️ Verkauf zurücknehmen
               </button>
             </div>
           )}
@@ -279,7 +341,16 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
         {/* Receipt Confirmation Form - Mobile optimized */}
         {confirmingReceipt && (
           <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3 text-sm">Erhalt bestätigen</h4>
+            <h4 className="font-medium text-gray-900 mb-3 text-sm">✅ Erhalt bestätigen</h4>
+            
+            {/* NEU: E-Mail-Info */}
+            <div className="mb-3 p-3 bg-blue-100 border border-blue-300 rounded">
+              <p className="text-sm text-blue-800">
+                <strong>📧 Was passiert:</strong> Der Administrator wird automatisch per E-Mail benachrichtigt, 
+                dass Sie das Gerät erhalten haben und kann den Versand vorbereiten.
+              </p>
+            </div>
+            
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -301,7 +372,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
                     </svg>
                     Bestätige...
                   </div>
-                ) : 'Bestätigen'}
+                ) : '✅ Bestätigen & Admin benachrichtigen'}
               </button>
               <button
                 onClick={() => setConfirmingReceipt(false)}
@@ -316,7 +387,15 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
         {/* Sale Confirmation Form - Mobile optimized */}
         {confirmingSale && (
           <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3 text-sm">Verkauf melden</h4>
+            <h4 className="font-medium text-gray-900 mb-3 text-sm">💰 Verkauf melden</h4>
+            
+            {/* NEU: E-Mail-Info */}
+            <div className="mb-3 p-3 bg-green-100 border border-green-300 rounded">
+              <p className="text-sm text-green-800">
+                <strong>📧 Was passiert:</strong> Der Administrator erhält eine E-Mail mit dem Verkaufspreis 
+                und einer detaillierten Gewinn-Aufschlüsselung (RepairHub vs. Ihr Anteil).
+              </p>
+            </div>
             
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -333,7 +412,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
               />
               {salePrice && parseFloat(salePrice) > minimumPrice && (
                 <p className="text-sm text-green-600 mt-1">
-                  Ihr Gewinn: {(parseFloat(salePrice) - minimumPrice).toFixed(2)}€
+                  💰 Ihr Gewinn: {(parseFloat(salePrice) - minimumPrice).toFixed(2)}€
                 </p>
               )}
             </div>
@@ -360,7 +439,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
                     </svg>
                     Melde...
                   </div>
-                ) : 'Verkauf melden'}
+                ) : '💰 Verkauf melden & Admin benachrichtigen'}
               </button>
               <button
                 onClick={() => setConfirmingSale(false)}
@@ -406,7 +485,7 @@ const DeviceCard = ({ deviceData, onUpdate }) => {
                     </svg>
                     Nehme zurück...
                   </div>
-                ) : 'Verkauf zurücknehmen'}
+                ) : '↩️ Verkauf zurücknehmen'}
               </button>
               <button
                 onClick={() => {

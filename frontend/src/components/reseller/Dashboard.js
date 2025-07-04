@@ -1,4 +1,4 @@
-// frontend/src/components/reseller/Dashboard.js
+// frontend/src/components/reseller/Dashboard.js - ERWEITERT mit E-Mail-Bestätigung
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import DeviceCard from './DeviceCard';
@@ -12,10 +12,25 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
   const [error, setError] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  
+  // NEU: Zustand für E-Mail-Bestätigungen
+  const [confirmingReceipt, setConfirmingReceipt] = useState(null);
+  const [message, setMessage] = useState(null);
 
   useEffect(() => {
     fetchDevices();
     fetchStats();
+    
+    // NEU: Prüfe URL-Parameter für automatische Bestätigung aus E-Mail
+    const urlParams = new URLSearchParams(window.location.search);
+    const confirmAssignmentId = urlParams.get('confirm');
+    
+    if (confirmAssignmentId) {
+      // Automatisch Bestätigung anzeigen
+      handleConfirmReceiptFromEmail(confirmAssignmentId);
+      // URL-Parameter entfernen
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   const fetchDevices = async () => {
@@ -45,6 +60,37 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
     } catch (error) {
       console.error('Fehler beim Laden der Statistiken:', error);
     }
+  };
+
+  // NEU: Gerät-Erhalt bestätigen (aus E-Mail-Link)
+  const handleConfirmReceiptFromEmail = async (assignmentId) => {
+    try {
+      setConfirmingReceipt(assignmentId);
+      
+      const token = localStorage.getItem('resellerToken');
+      const response = await axios.post(`/api/admin/confirm-receipt/${assignmentId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      showMessage('✅ Erhalt erfolgreich bestätigt! Der Admin wurde informiert.', 'success');
+      
+      // Dashboard-Daten neu laden
+      await fetchDevices();
+      await fetchStats();
+      
+    } catch (error) {
+      console.error('Fehler bei der Erhalt-Bestätigung:', error);
+      const errorMsg = error.response?.data?.error || 'Fehler bei der Bestätigung';
+      showMessage(`❌ ${errorMsg}`, 'error');
+    } finally {
+      setConfirmingReceipt(null);
+    }
+  };
+
+  // NEU: Nachricht anzeigen
+  const showMessage = (text, type = 'info') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 5000);
   };
 
   const handleLogout = () => {
@@ -193,6 +239,30 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 lg:px-8">
+        
+        {/* NEU: Message Banner für E-Mail-Bestätigungen */}
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg border ${
+            message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+            message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+            'bg-blue-50 border-blue-200 text-blue-800'
+          }`}>
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <p className="text-sm font-medium whitespace-pre-wrap">{message.text}</p>
+              </div>
+              <button
+                onClick={() => setMessage(null)}
+                className="ml-3 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded-lg text-sm">
             <div className="flex items-center">
@@ -207,7 +277,7 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
         {/* Stats - Already mobile-optimized */}
         <Stats stats={stats} />
 
-        {/* Quick Actions - Mobile optimized */}
+        {/* Quick Actions - Mobile optimized mit E-Mail-Hinweisen */}
         <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
           <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Schnellaktionen</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -217,6 +287,9 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
               <p className="text-blue-700 text-xs sm:text-sm">
                 {devices.filter(d => d.status === 'assigned').length} Geräte warten auf Bestätigung
               </p>
+              {devices.filter(d => d.status === 'assigned').length > 0 && (
+                <p className="text-blue-600 text-xs mt-1">📧 Prüfen Sie Ihre E-Mails!</p>
+              )}
             </div>
             
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 text-center">
@@ -235,6 +308,25 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
               </p>
             </div>
           </div>
+          
+          {/* NEU: E-Mail-Hinweis wenn neue Zuweisungen */}
+          {devices.filter(d => d.status === 'assigned').length > 0 && (
+            <div className="mt-4 bg-blue-100 border border-blue-300 rounded-lg p-3">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>📧 E-Mail-Benachrichtigung:</strong> Sie haben neue Gerätezuweisungen erhalten! 
+                    Prüfen Sie Ihre E-Mails für Details und nutzen Sie den direkten Bestätigungslink.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Device Section - Mobile optimized */}
@@ -262,12 +354,13 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
                   Wenden Sie sich an Ihren Administrator für neue Zuweisungen.
                 </p>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 max-w-md mx-auto">
-                  <h4 className="font-medium text-blue-900 mb-2 text-sm sm:text-base">So funktioniert es:</h4>
+                  <h4 className="font-medium text-blue-900 mb-2 text-sm sm:text-base">📧 So funktioniert es mit E-Mails:</h4>
                   <ol className="text-blue-700 text-xs sm:text-sm text-left space-y-1">
                     <li>1. Administrator weist Ihnen Geräte zu</li>
-                    <li>2. Sie bestätigen den Erhalt</li>
-                    <li>3. Sie verkaufen das Gerät</li>
-                    <li>4. Sie melden den Verkauf</li>
+                    <li>2. <strong>Sie erhalten eine E-Mail</strong> mit Details</li>
+                    <li>3. Klicken Sie den Bestätigungslink in der E-Mail</li>
+                    <li>4. Sie verkaufen das Gerät</li>
+                    <li>5. Sie melden den Verkauf (Admin wird benachrichtigt)</li>
                   </ol>
                 </div>
               </div>
@@ -279,13 +372,15 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
                   key={deviceData.assignmentId}
                   deviceData={deviceData}
                   onUpdate={handleDeviceUpdate}
+                  confirmingReceipt={confirmingReceipt}
+                  onConfirmReceipt={handleConfirmReceiptFromEmail}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* Help Section - Mobile optimized */}
+        {/* Help Section - Mobile optimized mit E-Mail-Info */}
         <div className="bg-white shadow rounded-lg p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Hilfe & Support</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -305,15 +400,15 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
               <div className="space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center space-x-2">
                   <span className="w-3 h-3 bg-yellow-400 rounded-full flex-shrink-0"></span>
-                  <span className="text-gray-700"><strong>Zugewiesen:</strong> Gerät wurde Ihnen zugewiesen</span>
+                  <span className="text-gray-700"><strong>Zugewiesen:</strong> Gerät wurde Ihnen zugewiesen (📧 E-Mail erhalten)</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></span>
-                  <span className="text-gray-700"><strong>Erhalten:</strong> Sie haben den Erhalt bestätigt</span>
+                  <span className="text-gray-700"><strong>Erhalten:</strong> Sie haben den Erhalt bestätigt (Admin benachrichtigt)</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></span>
-                  <span className="text-gray-700"><strong>Verkauft:</strong> Verkauf wurde gemeldet</span>
+                  <span className="text-gray-700"><strong>Verkauft:</strong> Verkauf wurde gemeldet (Admin benachrichtigt)</span>
                 </div>
               </div>
             </div>
@@ -327,6 +422,17 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
               <strong>Alles darüber:</strong> Ist Ihr Gewinn!<br />
               <em>Beispiel: Mindestpreis 300€, Verkauf für 350€ → Ihr Gewinn: 50€</em>
             </p>
+          </div>
+
+          {/* NEU: E-Mail-System Erklärung */}
+          <div className="mt-4 sm:mt-6 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+            <h4 className="font-medium text-green-900 mb-2 text-sm sm:text-base">📧 E-Mail-Benachrichtigungen</h4>
+            <div className="text-green-800 text-xs sm:text-sm space-y-1">
+              <p>• <strong>Neue Zuweisung:</strong> Sie erhalten eine E-Mail mit Gerätedetails und Bestätigungslink</p>
+              <p>• <strong>Bestätigung:</strong> Admin wird automatisch über Ihre Bestätigung informiert</p>
+              <p>• <strong>Verkauf:</strong> Admin erhält detaillierte Gewinn-Aufschlüsselung per E-Mail</p>
+              <p>• <strong>Direktlinks:</strong> Klicken Sie E-Mail-Links für schnelle Aktionen</p>
+            </div>
           </div>
         </div>
       </main>
