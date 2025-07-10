@@ -1,4 +1,4 @@
-// frontend/src/context/DeviceContext.js - KORRIGIERT mit checkImei Funktion
+// frontend/src/context/DeviceContext.js - KORRIGIERT mit korrekten API-Endpunkten
 import React, { createContext, useReducer } from 'react';
 import axios from 'axios';
 import DeviceReducer from './DeviceReducer';
@@ -144,7 +144,7 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
-  // KORRIGIERT: checkImei Funktion - das ist was AddDevice.js erwartet
+  // checkImei Funktion - für AddDevice.js (prüft IMEI und erstellt sofort Gerät)
   const checkImei = async (imei) => {
     try {
       dispatch({ type: 'SET_LOADING' });
@@ -154,16 +154,38 @@ export const DeviceProvider = ({ children }) => {
         throw new Error('Kein Authentifizierungs-Token gefunden');
       }
 
+      // Verwende den /check-imei Endpunkt für Datenabfrage
       const res = await axios.post('/api/devices/check-imei', { imei }, {
         headers: getAuthHeaders()
       });
       
-      dispatch({
-        type: 'ADD_DEVICE',
-        payload: res.data
-      });
-      
-      return res.data;
+      // Für AddDevice.js erstellen wir das Gerät sofort, falls es neu ist
+      if (res.data._isNew) {
+        // Neues Gerät mit Basis-Daten erstellen
+        const newDeviceRes = await axios.post('/api/devices', {
+          ...res.data,
+          // Entferne Meta-Felder
+          _isNew: undefined,
+          message: undefined
+        }, {
+          headers: getAuthHeaders()
+        });
+        
+        dispatch({
+          type: 'ADD_DEVICE',
+          payload: newDeviceRes.data
+        });
+        
+        return newDeviceRes.data;
+      } else {
+        // Existierendes Gerät zurückgeben
+        dispatch({
+          type: 'GET_DEVICE',
+          payload: res.data
+        });
+        
+        return res.data;
+      }
     } catch (error) {
       console.error('Error checking IMEI:', error);
       
@@ -198,7 +220,60 @@ export const DeviceProvider = ({ children }) => {
     }
   };
 
-  // Add device (zusätzlich zur checkImei Funktion)
+  // NEU: checkImeiOnly Funktion - für PurchaseGuide.js (prüft nur IMEI, erstellt KEIN Gerät)
+  const checkImeiOnly = async (imei) => {
+    try {
+      dispatch({ type: 'SET_LOADING' });
+      
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Kein Authentifizierungs-Token gefunden');
+      }
+
+      // Verwende den /check-imei Endpunkt nur für Datenabfrage
+      const res = await axios.post('/api/devices/check-imei', { imei }, {
+        headers: getAuthHeaders()
+      });
+      
+      // WICHTIG: Erstelle KEIN Gerät - gebe nur die Daten zurück
+      dispatch({ type: 'CLEAR_LOADING' }); // Loading beenden
+      
+      return res.data;
+    } catch (error) {
+      console.error('Error checking IMEI only:', error);
+      
+      let errorMessage = 'Fehler bei der IMEI-Überprüfung';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Nicht autorisiert. Bitte loggen Sie sich erneut ein.';
+        
+        // Token ungültig - weiterleiten zum Login
+        const adminToken = localStorage.getItem('adminToken');
+        const resellerToken = localStorage.getItem('resellerToken');
+        
+        if (adminToken) {
+          localStorage.removeItem('adminToken');
+          window.location.href = '/';
+        } else if (resellerToken) {
+          localStorage.removeItem('resellerToken');
+          window.location.href = '/reseller';
+        }
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Keine Berechtigung zum Hinzufügen von Geräten.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      dispatch({
+        type: 'DEVICE_ERROR',
+        payload: errorMessage
+      });
+      
+      throw error;
+    }
+  };
+
+  // KORRIGIERT: Add device - verwendet den korrekten /devices Endpunkt mit UPSERT-Logik
   const addDevice = async (deviceData) => {
     try {
       dispatch({ type: 'SET_LOADING' });
@@ -208,14 +283,23 @@ export const DeviceProvider = ({ children }) => {
         throw new Error('Kein Authentifizierungs-Token gefunden');
       }
 
-      const res = await axios.post('/api/devices/check-imei', deviceData, {
+      // Verwende den Standard /devices Endpunkt mit UPSERT-Logik
+      const res = await axios.post('/api/devices', deviceData, {
         headers: getAuthHeaders()
       });
       
-      dispatch({
-        type: 'ADD_DEVICE',
-        payload: res.data
-      });
+      // Je nachdem ob erstellt oder aktualisiert wurde
+      if (res.data._wasCreated) {
+        dispatch({
+          type: 'ADD_DEVICE',
+          payload: res.data
+        });
+      } else if (res.data._wasUpdated) {
+        dispatch({
+          type: 'UPDATE_DEVICE',
+          payload: res.data
+        });
+      }
       
       return res.data;
     } catch (error) {
@@ -300,8 +384,9 @@ export const DeviceProvider = ({ children }) => {
         getDevices,
         getDevice,
         getStats,
-        checkImei, // HINZUGEFÜGT - das ist was AddDevice.js braucht
-        addDevice,
+        checkImei, // Für AddDevice.js - prüft IMEI und erstellt sofort
+        checkImeiOnly, // NEU: Für PurchaseGuide.js - prüft nur IMEI, erstellt NICHT
+        addDevice, // Für PurchaseGuide.js - vollständiges Gerät mit UPSERT
         updateDevice,
         deleteDevice,
         clearErrors

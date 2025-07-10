@@ -1,12 +1,11 @@
-// frontend/src/components/purchase/PurchaseGuide.js - KORRIGIERT mit Authorization Header
+// frontend/src/components/purchase/PurchaseGuide.js - VOLLSTÄNDIG KORRIGIERT mit checkImeiOnly
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DeviceContext } from '../../context/DeviceContext';
-import axios from 'axios';
 
 const PurchaseGuide = () => {
   const navigate = useNavigate();
-  const { addDevice } = useContext(DeviceContext);
+  const { addDevice, checkImeiOnly } = useContext(DeviceContext); // NEU: checkImeiOnly verwenden
   
   // Haupt-State
   const [currentStep, setCurrentStep] = useState(1);
@@ -91,7 +90,7 @@ const PurchaseGuide = () => {
     { id: 5, title: 'Abschluss', icon: '✅', description: 'Ankauf dokumentieren' }
   ];
 
-  // KORRIGIERT: IMEI Check durchführen mit Authorization Header
+  // KORRIGIERT: IMEI Check mit checkImeiOnly (erstellt KEIN Gerät)
   const handleImeiCheck = async () => {
     if (!imei || imei.length < 15) {
       setError('Bitte geben Sie eine gültige IMEI ein (15-17 Ziffern)');
@@ -102,28 +101,24 @@ const PurchaseGuide = () => {
     setError(null);
 
     try {
-      // Token aus localStorage holen
-      const adminToken = localStorage.getItem('adminToken');
-      const resellerToken = localStorage.getItem('resellerToken');
-      const token = adminToken || resellerToken;
-
-      if (!token) {
-        setError('Kein Authentifizierungs-Token gefunden. Bitte loggen Sie sich erneut ein.');
-        return;
-      }
-
-      // API-Aufruf mit Authorization Header
-      const response = await axios.post('/api/devices/check-imei', 
-        { imei }, 
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      // NEU: Verwende checkImeiOnly - erstellt KEIN Gerät
+      const deviceInfo = await checkImeiOnly(imei);
       
-      setDeviceData(response.data);
-      setCurrentStep(2);
+      // Prüfe ob Gerät bereits existiert
+      if (deviceInfo._isExisting) {
+        setError(`Gerät mit IMEI ${imei} ist bereits in der Datenbank vorhanden. Möchten Sie es aktualisieren?`);
+        
+        // Trotzdem weitermachen, aber Warnung anzeigen
+        setDeviceData(deviceInfo);
+        setTimeout(() => {
+          setCurrentStep(2);
+          setError(null);
+        }, 3000);
+      } else {
+        // Neues Gerät - Daten sind verfügbar, aber noch nicht gespeichert
+        setDeviceData(deviceInfo);
+        setCurrentStep(2);
+      }
     } catch (err) {
       console.error('IMEI Check Fehler:', err);
       
@@ -131,9 +126,6 @@ const PurchaseGuide = () => {
       
       if (err.response?.status === 401) {
         errorMessage = 'Nicht autorisiert. Bitte loggen Sie sich erneut ein.';
-        // Token löschen und zur Login-Seite umleiten
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('resellerToken');
         setTimeout(() => {
           window.location.href = '/';
         }, 2000);
@@ -235,101 +227,128 @@ const PurchaseGuide = () => {
     });
   };
 
-  // KORRIGIERT: Ankauf abschließen mit DeviceContext
-  const completePurchase = async () => {
-    if (!deviceData) return;
+  // KORRIGIERT: Ankauf abschließen - jetzt wird das Gerät erstellt/aktualisiert
+const completePurchase = async () => {
+  if (!deviceData) return;
 
-    setLoading(true);
-    
-    try {
-      // Umfassende Schadensbeschreibung erstellen
-      const damageReport = createDamageReport();
-      
-      // Gerätedaten mit allen Ankaufinformationen erweitern
-      const enhancedDeviceData = {
-        ...deviceData,
-        purchasePrice: pricing.finalOffer,
-        desiredProfit: additionalInfo.desiredProfit,
-        damageDescription: damageReport,
-        
-        // NEU: Erweiterte Ankaufdaten
-        purchaseInfo: {
-          method: 'guided', // Kennzeichnung als PurchaseGuide-Ankauf
-          seller: additionalInfo.seller,
-          location: additionalInfo.purchaseLocation,
-          date: new Date(),
-          notes: additionalInfo.notes
-        },
-        
-        // NEU: Technische Details aus dem Ankauf
-        batteryInfo: {
-          health: functionalTest.batteryHealth,
-          maxCapacity: functionalTest.batteryMaxCapacity,
-          needsReplacement: functionalTest.batteryHealth < 80
-        },
-        
-        functionalStatus: {
-          allButtonsWork: functionalTest.allButtons,
-          touchscreenFunctional: functionalTest.touchscreen,
-          camerasWork: functionalTest.cameras,
-          speakersWork: functionalTest.speakers,
-          wifiWorks: functionalTest.wifi,
-          cellularWorks: functionalTest.cellular,
-          authenticationWorks: functionalTest.faceid_touchid
-        },
-        
-        physicalCondition: {
-          overallGrade: physicalCondition.overallGrade,
-          displayCondition: physicalCondition.displayCondition,
-          bodyCondition: physicalCondition.bodyCondition,
-          hasWaterDamage: functionalTest.waterDamage,
-          previousRepairs: functionalTest.previousRepairs
-        },
-        
-        softwareInfo: {
-          iosVersion: functionalTest.iosVersion,
-          availableStorage: functionalTest.storageSpace,
-          icloudStatus: functionalTest.icloudLocked ? 'locked' : 'clean',
-          carrierStatus: functionalTest.carrierLocked ? 'locked' : 'unlocked'
-        },
+  setLoading(true);
 
-        // Marktbewertung hinzufügen
-        marketValuation: {
-          estimatedMarketValue: pricing.marketValue,
-          conditionMultiplier: pricing.conditionMultiplier,
-          estimatedRepairCosts: pricing.repairCosts,
-          valuationDate: new Date(),
-          marketSource: 'internal_assessment'
-        },
+  try {
+    const damageReport = createDamageReport();
 
-        // Qualitätsbewertung
-        qualityAssessment: {
-          overallScore: physicalCondition.overallGrade,
-          functionalScore: functionalTest.powersOn && functionalTest.touchscreen ? 'good' : 'poor',
-          cosmeticScore: physicalCondition.displayCondition,
-          assessmentDate: new Date(),
-          assessedBy: 'purchase_guide'
-        }
-      };
+    // Hilfsfunktion für leere Strings
+    const emptyToUndefined = (value) => value === '' ? undefined : value;
 
-      // Gerät über DeviceContext speichern (verwendet bereits die richtige Auth)
-      await addDevice(enhancedDeviceData);
-      
-      // Zu Geräteliste navigieren mit Erfolgsbestätigung
-      navigate('/devices', { 
-        state: { 
-          message: `Gerät erfolgreich angekauft für ${pricing.finalOffer}€`,
-          type: 'success'
-        }
-      });
-      
-    } catch (err) {
-      console.error('Fehler beim Speichern:', err);
-      setError('Fehler beim Speichern des Geräts: ' + (err.message || 'Unbekannter Fehler'));
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Bereinigtes und API-kompatibles Objekt
+    const cleanDevice = {
+      imei: deviceData.imei,
+      imei2: emptyToUndefined(deviceData.imei2),
+      meid: emptyToUndefined(deviceData.meid),
+      serial: emptyToUndefined(deviceData.serial),
+      model: deviceData.model,
+      modelDesc: deviceData.modelDesc,
+      thumbnail: deviceData.thumbnail,
+      region: deviceData.region,
+      status: 'gekauft',
+
+      purchasePrice: pricing.finalOffer,
+      desiredProfit: additionalInfo.desiredProfit,
+      damageDescription: damageReport,
+
+      purchaseInfo: {
+        method: 'guided',
+        seller: emptyToUndefined(additionalInfo.seller),
+        location: emptyToUndefined(additionalInfo.purchaseLocation),
+        notes: emptyToUndefined(additionalInfo.notes),
+        date: new Date().toISOString()
+      },
+
+      softwareInfo: {
+        iosVersion: functionalTest.iosVersion,
+        availableStorage: Number(functionalTest.storageSpace) || undefined,
+        icloudStatus: functionalTest.icloudLocked ? 'locked' : 'clean',
+        carrierStatus: functionalTest.carrierLocked ? 'locked' : 'unlocked',
+        resetToFactory: false,
+        jailbroken: false
+      },
+
+      batteryInfo: {
+        health: functionalTest.batteryHealth,
+        maxCapacity: functionalTest.batteryMaxCapacity || undefined,
+        needsReplacement: functionalTest.batteryHealth < 80,
+        chargingSpeed: functionalTest.chargingWorks && functionalTest.fastCharging ? 'fast' : 'normal'
+      },
+
+      functionalStatus: {
+        allButtonsWork: functionalTest.allButtons,
+        touchscreenFunctional: functionalTest.touchscreen,
+        camerasWork: functionalTest.cameras,
+        speakersWork: functionalTest.speakers,
+        microphoneWorks: functionalTest.microphone,
+        wifiWorks: functionalTest.wifi,
+        cellularWorks: functionalTest.cellular,
+        bluetoothWorks: functionalTest.bluetooth,
+        authenticationWorks: functionalTest.faceid_touchid,
+        chargingWorks: functionalTest.chargingWorks,
+        fastCharging: functionalTest.fastCharging,
+        overallFunctional: functionalTest.powersOn && functionalTest.touchscreen
+      },
+
+      physicalCondition: {
+        overallGrade: physicalCondition.overallGrade,
+        displayCondition: physicalCondition.displayCondition,
+        displayDamage: physicalCondition.displayDamage,
+        bodyCondition: physicalCondition.bodyCondition,
+        bodyDamage: physicalCondition.bodyDamage,
+        hasWaterDamage: functionalTest.waterDamage,
+        previousRepairs: functionalTest.previousRepairs,
+        repairHistory: emptyToUndefined(functionalTest.repairHistory),
+        portsCondition: physicalCondition.portsCondition
+      },
+
+      marketValuation: {
+        estimatedMarketValue: pricing.marketValue,
+        conditionMultiplier: pricing.conditionMultiplier,
+        estimatedRepairCosts: pricing.repairCosts,
+        profitMarginExpected: pricing.profitMargin,
+        valuationDate: new Date().toISOString(),
+        marketSource: 'internal_assessment'
+      },
+
+      qualityAssessment: {
+        displayBrightness: functionalTest.displayBrightness,
+        touchSensitivity: functionalTest.touchSensitivity,
+        cameraQuality: functionalTest.cameraQuality,
+        audioQuality: functionalTest.audioQuality,
+        overallPerformance: Math.round((functionalTest.displayBrightness + functionalTest.touchSensitivity) / 2),
+        functionalIssues: functionalTest.functionalIssues,
+        testDate: new Date().toISOString()
+      }
+    };
+
+    console.log('Clean Device:', cleanDevice); // Optional: Debug
+
+    const savedDevice = await addDevice(cleanDevice);
+
+    navigate('/devices', {
+      state: {
+        message: savedDevice._wasUpdated
+          ? `Gerät erfolgreich aktualisiert für ${pricing.finalOffer}€`
+          : `Gerät erfolgreich angekauft für ${pricing.finalOffer}€`,
+        type: 'success'
+      }
+    });
+
+  } catch (err) {
+    console.error('Fehler beim Speichern:', err.response?.data || err);
+    setError('Fehler beim Speichern des Geräts: ' +
+      (err.response?.data?.error || JSON.stringify(err.response?.data) || err.message)
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Detaillierten Schadensbericht erstellen
   const createDamageReport = () => {
@@ -515,6 +534,9 @@ const PurchaseGuide = () => {
                     <h3 className="font-semibold">{deviceData.model}</h3>
                     <p className="text-sm text-gray-600">IMEI: {deviceData.imei}</p>
                     <p className="text-sm text-gray-600">Status: {deviceData.usaBlockStatus}</p>
+                    {deviceData._isExisting && (
+                      <p className="text-sm text-orange-600 font-medium">⚠️ Gerät bereits in Datenbank</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1303,4 +1325,3 @@ const PurchaseGuide = () => {
 };
 
 export default PurchaseGuide;
-                    

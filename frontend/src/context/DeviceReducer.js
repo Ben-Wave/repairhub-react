@@ -22,6 +22,11 @@ const deviceReducer = (state, action) => {
         loading: false,
         error: null
       };
+    case 'CLEAR_LOADING':
+      return {
+        ...state,
+        loading: false
+      };
     case 'UPDATE_DEVICE':
       return {
         ...state,
