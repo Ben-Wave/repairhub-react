@@ -124,8 +124,11 @@ class EmailService {
               
               <div class="info-grid">
                 <div class="info-item">
-                  <strong>Status:</strong><br>
-                  <span style="color: #059669;">${device.status}</span>
+                  <strong>💰 Ihr Gewinnpotenzial:</strong><br>
+                  <span style="color: #059669; font-weight: bold;">
+                    ${Math.round((assignment.minimumPrice * 0.1))}€ - ${Math.round((assignment.minimumPrice * 0.3))}€
+                  </span><br>
+                  <small style="color: #6b7280;">Bei 10-30% Aufschlag</small>
                 </div>
                 <div class="info-item">
                   <strong>Zugewiesen am:</strong><br>

@@ -390,7 +390,7 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
                 Bei Fragen oder Problemen wenden Sie sich an:
               </p>
               <div className="text-xs sm:text-sm text-gray-700 space-y-1">
-                <p>📧 Repairhub@mail.de</p>
+                <p>📧 admin@repairhub.ovh</p>
                 <p>📱 017631762175</p>
               </div>
             </div>

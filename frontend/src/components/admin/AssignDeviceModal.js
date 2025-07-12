@@ -16,8 +16,11 @@ const AssignDeviceModal = ({ onClose, onDeviceAssigned, resellers }) => {
   }, []);
 
   const fetchAvailableDevices = async () => {
-    try {
-      const response = await axios.get('/api/admin/available-devices');
+  try {
+    const token = localStorage.getItem('adminToken');
+    const response = await axios.get('/api/admin/available-devices', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
       setAvailableDevices(response.data);
     } catch (error) {
       console.error('Fehler beim Laden der Geräte:', error);
@@ -44,12 +47,15 @@ const AssignDeviceModal = ({ onClose, onDeviceAssigned, resellers }) => {
       return;
     }
 
-    try {
-      await axios.post('/api/admin/assign-device', {
-        deviceId: selectedDevice,
-        resellerId: selectedReseller,
-        minimumPrice: parseFloat(minimumPrice)
-      });
+  try {
+    const token = localStorage.getItem('adminToken');
+    await axios.post('/api/admin/assign-device', {
+      deviceId: selectedDevice,
+      resellerId: selectedReseller,
+      minimumPrice: parseFloat(minimumPrice)
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
       onDeviceAssigned();
     } catch (error) {
       setError(error.response?.data?.error || 'Fehler beim Zuweisen des Geräts');

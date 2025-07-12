@@ -146,7 +146,7 @@ const ResellerLogin = ({ onLogin }) => {
               Probleme beim Login?
             </p>
             <div className="space-y-1 text-xs sm:text-sm text-gray-700">
-              <p>📧 Repairhub@mail.de</p>
+              <p>📧 admin@repairhub.ovh</p>
               <p>📱 017631762175</p>
             </div>
           </div>
