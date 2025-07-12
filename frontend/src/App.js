@@ -22,6 +22,7 @@ import ResellerManagement from './components/admin/ResellerManagement';
 import UserManagement from './components/admin/UserManagement';
 import RegisterPage from './components/pages/RegisterPage';
 import RegisterResellerPage from './components/pages/RegisterResellerPage';
+import Analytics from './components/analytics/Analytics';
 import axios from 'axios';
 import './App.css';
 
@@ -256,7 +257,12 @@ const AdminRoutes = ({ admin, onLogout }) => {
               <PriceCalculator />
             </ProtectedRoute>
           } />
-          
+          {/* NEU: Analytics Route */}
+          <Route path="/analytics" element={
+            <ProtectedRoute requiredPermission="system.statistics">
+              <Analytics />
+            </ProtectedRoute>
+          } />
           {/* Admin-Routen */}
           <Route path="/admin/resellers" element={
             <ProtectedRoute requiredPermission="resellers.view">

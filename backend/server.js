@@ -651,7 +651,481 @@ app.get('/api/stats', authenticateToken, requirePermission('system', 'statistics
     res.status(500).json({ error: 'Fehler beim Abrufen der Statistiken' });
   }
 });
+// NEU: Detaillierte Analytics für Admin Dashboard - benötigt system.statistics
+app.get('/api/analytics/detailed', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    
+    // Date filter logic
+    let dateQuery = {};
+    if (dateFilter && dateFilter !== 'all') {
+      const daysAgo = {
+        '30d': 30,
+        '90d': 90,
+        '1y': 365
+      }[dateFilter];
+      
+      if (daysAgo) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+        dateQuery.purchaseDate = { $gte: cutoffDate };
+      }
+    }
 
+    // Get devices with date filter
+    const devices = await Device.find(dateQuery).sort({ createdAt: -1 });
+    
+    // Model Analysis with aggregation
+    const modelAnalysis = await Device.aggregate([
+      { $match: dateQuery },
+      {
+        $addFields: {
+          baseModel: {
+            $trim: {
+              input: {
+                $replaceAll: {
+                  input: {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: { $ifNull: ["$modelDesc", "$model"] },
+                          find: { $regex: "\\s+(Black|White|Red|Blue|Green|Yellow|Purple|Pink|Starlight|Midnight|Silver|Gold|Graphite|Sierra Blue|Alpine Green|Product RED|Pacific Blue)\\s+", options: "i" },
+                          replacement: " "
+                        }
+                      },
+                      find: { $regex: "\\s+\\d+GB\\s+", options: "i" },
+                      replacement: " "
+                    }
+                  },
+                  find: { $regex: "\\s+\\[.*?\\]", options: "i" },
+                  replacement: ""
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$baseModel",
+          totalCount: { $sum: 1 },
+          soldCount: {
+            $sum: { $cond: [{ $eq: ["$status", "verkauft"] }, 1, 0] }
+          },
+          totalRevenue: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                0
+              ]
+            }
+          },
+          totalProfit: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                {
+                  $subtract: [
+                    { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                    {
+                      $add: [
+                        { $ifNull: ["$purchasePrice", 0] },
+                        {
+                          $reduce: {
+                            input: { $ifNull: ["$parts", []] },
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $ifNull: ["$$this.price", 0] }] }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0
+              ]
+            }
+          },
+          avgPurchasePrice: { $avg: "$purchasePrice" },
+          avgSellingPrice: {
+            $avg: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                null
+              ]
+            }
+          },
+          avgBatteryHealth: { $avg: "$batteryInfo.health" }
+        }
+      },
+      {
+        $addFields: {
+          sellRate: {
+            $cond: [
+              { $gt: ["$totalCount", 0] },
+              { $multiply: [{ $divide: ["$soldCount", "$totalCount"] }, 100] },
+              0
+            ]
+          }
+        }
+      },
+      { $sort: { totalRevenue: -1 } }
+    ]);
+
+    // Battery Health Analysis
+    const batteryAnalysis = await Device.aggregate([
+      { $match: { ...dateQuery, "batteryInfo.health": { $exists: true } } },
+      {
+        $bucket: {
+          groupBy: "$batteryInfo.health",
+          boundaries: [0, 70, 80, 90, 100],
+          default: "unknown",
+          output: {
+            count: { $sum: 1 },
+            avgPurchasePrice: { $avg: "$purchasePrice" },
+            models: { $addToSet: { $ifNull: ["$modelDesc", "$model"] } }
+          }
+        }
+      }
+    ]);
+
+    // Quality Grade Analysis
+    const qualityAnalysis = await Device.aggregate([
+      { $match: { ...dateQuery, "physicalCondition.overallGrade": { $exists: true } } },
+      {
+        $group: {
+          _id: "$physicalCondition.overallGrade",
+          count: { $sum: 1 },
+          avgSellingPrice: {
+            $avg: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                null
+              ]
+            }
+          },
+          avgBatteryHealth: { $avg: "$batteryInfo.health" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Time Analysis - Sales duration
+    const timeAnalysis = await Device.aggregate([
+      {
+        $match: {
+          ...dateQuery,
+          status: "verkauft",
+          soldDate: { $exists: true },
+          purchaseDate: { $exists: true }
+        }
+      },
+      {
+        $addFields: {
+          salesDuration: {
+            $divide: [
+              { $subtract: ["$soldDate", "$purchaseDate"] },
+              1000 * 60 * 60 * 24 // Convert to days
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgSalesDuration: { $avg: "$salesDuration" },
+          minSalesDuration: { $min: "$salesDuration" },
+          maxSalesDuration: { $max: "$salesDuration" },
+          totalSales: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Purchase Method Analysis
+    const purchaseMethodAnalysis = await Device.aggregate([
+      { $match: dateQuery },
+      {
+        $group: {
+          _id: { $ifNull: ["$purchaseInfo.method", "manual"] },
+          count: { $sum: 1 },
+          totalRevenue: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                0
+              ]
+            }
+          },
+          totalProfit: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                {
+                  $subtract: [
+                    { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                    {
+                      $add: [
+                        { $ifNull: ["$purchasePrice", 0] },
+                        {
+                          $reduce: {
+                            input: { $ifNull: ["$parts", []] },
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $ifNull: ["$$this.price", 0] }] }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0
+              ]
+            }
+          },
+          avgBatteryHealth: { $avg: "$batteryInfo.health" }
+        }
+      }
+    ]);
+
+    // Overall Statistics
+    const overallStats = await Device.aggregate([
+      { $match: dateQuery },
+      {
+        $group: {
+          _id: null,
+          totalDevices: { $sum: 1 },
+          soldDevices: {
+            $sum: { $cond: [{ $eq: ["$status", "verkauft"] }, 1, 0] }
+          },
+          totalRevenue: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                0
+              ]
+            }
+          },
+          totalProfit: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                {
+                  $subtract: [
+                    { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                    {
+                      $add: [
+                        { $ifNull: ["$purchasePrice", 0] },
+                        {
+                          $reduce: {
+                            input: { $ifNull: ["$parts", []] },
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $ifNull: ["$$this.price", 0] }] }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                0
+              ]
+            }
+          },
+          avgPurchasePrice: { $avg: "$purchasePrice" },
+          avgSellingPrice: {
+            $avg: {
+              $cond: [
+                { $eq: ["$status", "verkauft"] },
+                { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+                null
+              ]
+            }
+          },
+          avgBatteryHealth: { $avg: "$batteryInfo.health" }
+        }
+      }
+    ]);
+
+    const response = {
+      overview: overallStats[0] || {},
+      modelAnalysis: modelAnalysis,
+      batteryAnalysis: batteryAnalysis,
+      qualityAnalysis: qualityAnalysis,
+      timeAnalysis: timeAnalysis[0] || {},
+      purchaseMethodAnalysis: purchaseMethodAnalysis,
+      metadata: {
+        dateFilter,
+        totalDevicesInFilter: devices.length,
+        generatedAt: new Date().toISOString()
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der detaillierten Analytics:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Analytics-Daten' });
+  }
+});
+
+// NEU: Profit-Trends über Zeit - benötigt system.statistics
+app.get('/api/analytics/profit-trends', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
+  try {
+    const { period = 'month' } = req.query; // 'week', 'month', 'quarter'
+    
+    let groupBy = {};
+    switch (period) {
+      case 'week':
+        groupBy = {
+          year: { $year: "$soldDate" },
+          week: { $week: "$soldDate" }
+        };
+        break;
+      case 'quarter':
+        groupBy = {
+          year: { $year: "$soldDate" },
+          quarter: {
+            $ceil: { $divide: [{ $month: "$soldDate" }, 3] }
+          }
+        };
+        break;
+      default: // month
+        groupBy = {
+          year: { $year: "$soldDate" },
+          month: { $month: "$soldDate" }
+        };
+    }
+
+    const profitTrends = await Device.aggregate([
+      {
+        $match: {
+          status: "verkauft",
+          soldDate: { $exists: true },
+          soldDate: { $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) } // Last year
+        }
+      },
+      {
+        $addFields: {
+          profit: {
+            $subtract: [
+              { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+              {
+                $add: [
+                  { $ifNull: ["$purchasePrice", 0] },
+                  {
+                    $reduce: {
+                      input: { $ifNull: ["$parts", []] },
+                      initialValue: 0,
+                      in: { $add: ["$$value", { $ifNull: ["$$this.price", 0] }] }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: groupBy,
+          totalProfit: { $sum: "$profit" },
+          totalRevenue: { $sum: { $ifNull: ["$actualSellingPrice", "$sellingPrice"] } },
+          devicesSold: { $sum: 1 },
+          avgProfit: { $avg: "$profit" }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.week": 1, "_id.quarter": 1 } }
+    ]);
+
+    res.json(profitTrends);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Profit-Trends:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Profit-Trends' });
+  }
+});
+
+// NEU: Top/Bottom Performer Geräte - benötigt system.statistics
+app.get('/api/analytics/top-performers', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
+  try {
+    const { type = 'profit', limit = 10 } = req.query;
+    
+    let sortField = {};
+    let addFields = {};
+    
+    switch (type) {
+      case 'profit':
+        addFields.performance = {
+          $subtract: [
+            { $ifNull: ["$actualSellingPrice", "$sellingPrice"] },
+            {
+              $add: [
+                { $ifNull: ["$purchasePrice", 0] },
+                {
+                  $reduce: {
+                    input: { $ifNull: ["$parts", []] },
+                    initialValue: 0,
+                    in: { $add: ["$$value", { $ifNull: ["$$this.price", 0] }] }
+                  }
+                }
+              ]
+            }
+          ]
+        };
+        sortField.performance = -1;
+        break;
+      case 'revenue':
+        addFields.performance = { $ifNull: ["$actualSellingPrice", "$sellingPrice"] };
+        sortField.performance = -1;
+        break;
+      case 'speed':
+        addFields.performance = {
+          $divide: [
+            { $subtract: ["$soldDate", "$purchaseDate"] },
+            1000 * 60 * 60 * 24 // Days
+          ]
+        };
+        sortField.performance = 1; // Ascending for fastest sales
+        break;
+    }
+
+    const performers = await Device.aggregate([
+      {
+        $match: {
+          status: "verkauft",
+          soldDate: { $exists: true }
+        }
+      },
+      { $addFields: addFields },
+      { $sort: sortField },
+      { $limit: parseInt(limit) },
+      {
+        $project: {
+          imei: 1,
+          model: 1,
+          modelDesc: 1,
+          purchasePrice: 1,
+          sellingPrice: 1,
+          actualSellingPrice: 1,
+          soldDate: 1,
+          purchaseDate: 1,
+          performance: 1,
+          batteryInfo: 1,
+          physicalCondition: 1
+        }
+      }
+    ]);
+
+    res.json({
+      type,
+      limit: parseInt(limit),
+      performers
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Top Performer:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Top Performer' });
+  }
+});
 // NEU: Geräte-Statistiken nach Ankaufsmethode - benötigt system.statistics
 app.get('/api/stats/purchase-methods', authenticateToken, requirePermission('system', 'statistics'), async (req, res) => {
   try {

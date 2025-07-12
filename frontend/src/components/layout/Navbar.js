@@ -124,7 +124,17 @@ const Navbar = ({ admin, onLogout }) => {
                 📊 Dashboard
               </Link>
             )}
-            
+            {/* Analytics - nur wenn Statistiken-Berechtigung vorhanden */}
+            {hasPermission('system', 'statistics') && (
+              <Link 
+                to="/analytics" 
+                className={`text-white hover:text-blue-200 transition duration-200 px-3 py-2 rounded-md text-sm font-medium ${
+                  isActive('/analytics') ? 'bg-blue-800 border-b-2 border-blue-300' : ''
+                }`}
+              >
+                📈 Analytics
+              </Link>
+            )}
             {/* Geräte - nur wenn Berechtigung vorhanden */}
             {hasPermission('devices', 'view') && (
               <Link 
@@ -275,7 +285,18 @@ const Navbar = ({ admin, onLogout }) => {
                 📊 Dashboard
               </Link>
             )}
-
+            {/* Analytics - Mobile */}
+            {hasPermission('system', 'statistics') && (
+              <Link 
+                to="/analytics" 
+                onClick={closeMobileMenu}
+                className={`block text-white hover:text-blue-200 px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/analytics') ? 'bg-blue-800' : ''
+                }`}
+              >
+                📈 Analytics
+              </Link>
+            )}
             {/* Geräte - Mobile */}
             {hasPermission('devices', 'view') && (
               <Link 

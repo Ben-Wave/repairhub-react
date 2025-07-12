@@ -285,14 +285,27 @@ const DeviceList = () => {
                       </div>
                     )}
                     
-                    {device.sellingPrice && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Verkaufspreis:</span>
-                        <span className="text-sm font-medium text-green-600">
-                          {device.sellingPrice.toFixed(2)} €
-                        </span>
-                      </div>
-                    )}
+                  {(device.actualSellingPrice || device.sellingPrice) && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">
+                        {device.status === 'verkauft' ? 'Verkauft für:' : 'Verkaufspreis:'}
+                      </span>
+                      <span className={`text-sm font-medium ${
+                        device.status === 'verkauft' ? 'text-purple-600' : 'text-green-600'
+                      }`}>
+                        {device.actualSellingPrice ? 
+                          `${device.actualSellingPrice.toFixed(2)} €` : 
+                          `${device.sellingPrice.toFixed(2)} €`
+                        }
+                        {device.actualSellingPrice && device.sellingPrice && 
+                        device.actualSellingPrice !== device.sellingPrice && (
+                          <span className="text-xs text-gray-500 block">
+                            (geplant: {device.sellingPrice.toFixed(2)} €)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   </div>
 
                   {/* Action Button */}
@@ -318,7 +331,7 @@ const DeviceList = () => {
                       <th className="py-3 px-4 text-left font-medium text-gray-700">Seriennummer</th>
                       <th className="py-3 px-4 text-left font-medium text-gray-700">Status</th>
                       <th className="py-3 px-4 text-left font-medium text-gray-700">Akku</th>
-                      <th className="py-3 px-4 text-left font-medium text-gray-700">Verkaufspreis</th>
+                      <th className="py-3 px-4 text-left font-medium text-gray-700">Preis</th>
                       <th className="py-3 px-4 text-center font-medium text-gray-700">Aktionen</th>
                     </tr>
                   </thead>
@@ -368,15 +381,28 @@ const DeviceList = () => {
                             <span className="text-gray-400 text-sm">-</span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
-                          {device.sellingPrice ? (
-                            <span className="font-medium text-green-600">
-                              {device.sellingPrice.toFixed(2)} €
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
+                       <td className="py-3 px-4">
+                      {(device.actualSellingPrice || device.sellingPrice) ? (
+                        <div>
+                          <span className={`font-medium ${
+                            device.status === 'verkauft' ? 'text-purple-600' : 'text-green-600'
+                          }`}>
+                            {device.actualSellingPrice ? 
+                              `${device.actualSellingPrice.toFixed(2)} €` : 
+                              `${device.sellingPrice.toFixed(2)} €`
+                            }
+                          </span>
+                          {device.actualSellingPrice && device.sellingPrice && 
+                          device.actualSellingPrice !== device.sellingPrice && (
+                            <div className="text-xs text-gray-500">
+                              geplant: {device.sellingPrice.toFixed(2)} €
+                            </div>
                           )}
-                        </td>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                         <td className="py-3 px-4 text-center">
                           <Link
                             to={`/devices/${device._id}`}
