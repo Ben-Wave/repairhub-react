@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import ResellerLogin from './Login';
 import ResellerDashboard from './Dashboard';
 import ChangePasswordModal from './ChangePasswordModal';
+import ResetPassword from './ResetPassword';
 
 const ResellerApp = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -106,14 +108,14 @@ const ResellerApp = () => {
     }
   };
 
-const handleLogout = () => {
-  setReseller(null);
-  setIsAuthenticated(false);
-  setMustChangePassword(false);
-  setIsFirstLogin(false);
-  // GEÄNDERT: Nicht zur Hauptseite umleiten, bei Reseller-Login bleiben
-  // window.location.href = '/'; // ENTFERNT
-};
+  const handleLogout = () => {
+    setReseller(null);
+    setIsAuthenticated(false);
+    setMustChangePassword(false);
+    setIsFirstLogin(false);
+    // GEÄNDERT: Nicht zur Hauptseite umleiten, bei Reseller-Login bleiben
+    // window.location.href = '/'; // ENTFERNT
+  };
 
   const handlePasswordChanged = () => {
     setMustChangePassword(false);
@@ -140,25 +142,33 @@ const handleLogout = () => {
         </div>
       )}
       
-      {isAuthenticated ? (
-        <>
-          <ResellerDashboard 
-            reseller={reseller} 
-            onLogout={handleLogout} 
-          />
-          
-          {/* Passwort-Ändern Modal */}
-          {mustChangePassword && (
-            <ChangePasswordModal
-              isFirstLogin={isFirstLogin}
-              onPasswordChanged={handlePasswordChanged}
-              onClose={!isFirstLogin ? () => setMustChangePassword(false) : undefined}
-            />
-          )}
-        </>
-      ) : (
-        <ResellerLogin onLogin={handleLogin} />
-      )}
+      <Routes>
+        {/* Reset Password Route - IMMER verfügbar */}
+        <Route path="/reset-password" element={<ResetPassword />} />
+        
+        {/* Dashboard oder Login Route */}
+        <Route path="/*" element={
+          isAuthenticated ? (
+            <>
+              <ResellerDashboard 
+                reseller={reseller} 
+                onLogout={handleLogout} 
+              />
+              
+              {/* Passwort-Ändern Modal */}
+              {mustChangePassword && (
+                <ChangePasswordModal
+                  isFirstLogin={isFirstLogin}
+                  onPasswordChanged={handlePasswordChanged}
+                  onClose={!isFirstLogin ? () => setMustChangePassword(false) : undefined}
+                />
+              )}
+            </>
+          ) : (
+            <ResellerLogin onLogin={handleLogin} />
+          )
+        } />
+      </Routes>
     </div>
   );
 };

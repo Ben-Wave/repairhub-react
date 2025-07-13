@@ -1,7 +1,9 @@
 // backend/routes/auth.js - ERWEITERT mit User-Passwort-Änderung
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const emailService = require('../services/emailService');
 const { Reseller, Admin, UserRole } = require('../models');
 const router = express.Router();
 
@@ -300,4 +302,113 @@ router.get('/user-info', authenticateToken, async (req, res) => {
   }
 });
 
+// NEU: Password Reset Request für Reseller
+router.post('/request-password-reset', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'E-Mail-Adresse ist erforderlich' });
+    }
+
+    // E-Mail-Format prüfen
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+    }
+
+    // Reseller suchen (Admins und Reseller getrennt behandeln)
+    const reseller = await Reseller.findOne({ email, isActive: true });
+    
+    if (!reseller) {
+      // Aus Sicherheitsgründen immer "success" zurückgeben
+      return res.json({ 
+        success: true, 
+        message: 'Falls ein Account mit dieser E-Mail existiert, wurde eine Reset-E-Mail gesendet.' 
+      });
+    }
+
+    // Reset-Token generieren
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 Stunde gültig
+
+    // Token im Reseller speichern
+    reseller.resetPasswordToken = resetToken;
+    reseller.resetPasswordExpiry = resetTokenExpiry;
+    await reseller.save();
+
+    // E-Mail senden
+    const emailResult = await emailService.sendPasswordReset(
+      reseller.email, 
+      resetToken, 
+      reseller.name
+    );
+
+    if (!emailResult.success) {
+      console.error('Fehler beim Senden der Reset-E-Mail:', emailResult.error);
+      return res.status(500).json({ 
+        error: 'Fehler beim Senden der Reset-E-Mail. Bitte versuchen Sie es später erneut.' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Reset-E-Mail wurde gesendet. Überprüfen Sie Ihr Postfach.' 
+    });
+
+  } catch (error) {
+    console.error('Password Reset Request Fehler:', error);
+    res.status(500).json({ error: 'Server-Fehler beim Anfordern des Password-Resets' });
+  }
+});
+
+// NEU: Password Reset durchführen
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token und neues Passwort sind erforderlich' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
+    }
+
+    // Reseller mit gültigem Token finden
+    const reseller = await Reseller.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpiry: { $gt: new Date() },
+      isActive: true
+    });
+
+    if (!reseller) {
+      return res.status(400).json({ 
+        error: 'Ungültiger oder abgelaufener Reset-Token. Bitte fordern Sie einen neuen an.' 
+      });
+    }
+
+    // Neues Passwort hashen und speichern
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    reseller.password = hashedPassword;
+    reseller.resetPasswordToken = undefined;
+    reseller.resetPasswordExpiry = undefined;
+    reseller.mustChangePassword = false;
+    reseller.firstLogin = false;
+    reseller.lastPasswordChange = new Date();
+    reseller.updatedAt = new Date();
+    
+    await reseller.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Passwort erfolgreich zurückgesetzt. Sie können sich jetzt anmelden.' 
+    });
+
+  } catch (error) {
+    console.error('Password Reset Fehler:', error);
+    res.status(500).json({ error: 'Server-Fehler beim Zurücksetzen des Passworts' });
+  }
+});
 module.exports = { router, authenticateToken, requirePermission };

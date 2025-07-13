@@ -4,6 +4,8 @@ import axios from 'axios';
 import DeviceCard from './DeviceCard';
 import Stats from './Stats';
 import ChangePasswordModal from './ChangePasswordModal';
+import ResellerApprovalModal from './ResellerApprovalModal';
+import ResellerDeliveryModal from './ResellerDeliveryModal';
 
 const ResellerDashboard = ({ reseller, onLogout }) => {
   const [devices, setDevices] = useState([]);
@@ -64,28 +66,35 @@ const ResellerDashboard = ({ reseller, onLogout }) => {
 
   // NEU: Gerät-Erhalt bestätigen (aus E-Mail-Link)
   const handleConfirmReceiptFromEmail = async (assignmentId) => {
-    try {
-      setConfirmingReceipt(assignmentId);
-      
-      const token = localStorage.getItem('resellerToken');
-      const response = await axios.post(`/api/admin/confirm-receipt/${assignmentId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      showMessage('✅ Erhalt erfolgreich bestätigt! Der Admin wurde informiert.', 'success');
-      
-      // Dashboard-Daten neu laden
-      await fetchDevices();
-      await fetchStats();
-      
-    } catch (error) {
-      console.error('Fehler bei der Erhalt-Bestätigung:', error);
-      const errorMsg = error.response?.data?.error || 'Fehler bei der Bestätigung';
-      showMessage(`❌ ${errorMsg}`, 'error');
-    } finally {
-      setConfirmingReceipt(null);
-    }
-  };
+  try {
+    setConfirmingReceipt(assignmentId);
+    
+    const token = localStorage.getItem('resellerToken');
+    
+    // ✅ KORRIGIERT: Richtige Route verwenden
+    const response = await axios.post(`/api/admin/confirm-delivery/${assignmentId}`, {
+      // Standard-Werte für E-Mail-Bestätigung
+      condition: 'gut',
+      issues: '',
+      notes: 'Automatische Bestätigung über E-Mail-Link'
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    showMessage('✅ Erhalt erfolgreich bestätigt! Der Admin wurde informiert.', 'success');
+    
+    // Dashboard-Daten neu laden
+    await fetchDevices();
+    await fetchStats();
+    
+  } catch (error) {
+    console.error('Fehler bei der Erhalt-Bestätigung:', error);
+    const errorMsg = error.response?.data?.error || 'Fehler bei der Bestätigung';
+    showMessage(`❌ ${errorMsg}`, 'error');
+  } finally {
+    setConfirmingReceipt(null);
+  }
+};
 
   // NEU: Nachricht anzeigen
   const showMessage = (text, type = 'info') => {

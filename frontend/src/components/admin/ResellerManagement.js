@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import CreateResellerModal from './CreateResellerModal';
 import AssignDeviceModal from './AssignDeviceModal';
+import AdminShippingModal from './AdminShippingModal';
 
 const ResellerManagement = () => {
   const [resellers, setResellers] = useState([]);
@@ -15,6 +16,8 @@ const ResellerManagement = () => {
   const [revokingAssignment, setRevokingAssignment] = useState(null);
   const [revokeReason, setRevokeReason] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [showShippingModal, setShowShippingModal] = useState(false);
+  const [selectedShipping, setSelectedShipping] = useState(null);
 
   // NEU: Reseller-Aktionen Modals
   const [actionModal, setActionModal] = useState({
@@ -57,6 +60,12 @@ const ResellerManagement = () => {
   const handleDeviceAssigned = () => {
     fetchAssignments();
     setShowAssignModal(false);
+  };
+
+  const handleShipped = () => {
+  fetchAssignments();
+  setShowShippingModal(false);
+  setSelectedShipping(null);
   };
 
   // NEU: Reseller deaktivieren/aktivieren
@@ -153,22 +162,25 @@ const ResellerManagement = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      assigned: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Zugewiesen' },
-      received: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Erhalten' },
-      sold: { bg: 'bg-green-100', text: 'text-green-800', label: 'Verkauft' },
-      returned: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Zurückgezogen' }
-    };
-
-    const config = statusConfig[status] || statusConfig.assigned;
-
-    return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        {config.label}
-      </span>
-    );
+const getStatusBadge = (status) => {
+  const statusConfig = {
+    assigned: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: '📋 Zugewiesen' },
+    approved: { bg: 'bg-blue-100', text: 'text-blue-800', label: '🚀 Freigegeben' },
+    shipped: { bg: 'bg-purple-100', text: 'text-purple-800', label: '📦 Versendet' },
+    handed_over: { bg: 'bg-purple-100', text: 'text-purple-800', label: '🤝 Übergeben' },
+    received: { bg: 'bg-green-100', text: 'text-green-800', label: '✅ Erhalten' },
+    sold: { bg: 'bg-gray-100', text: 'text-gray-800', label: '💰 Verkauft' },
+    returned: { bg: 'bg-gray-100', text: 'text-gray-800', label: '📋 Zurückgezogen' }
   };
+
+  const config = statusConfig[status] || statusConfig.assigned;
+
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+      {config.label}
+    </span>
+  );
+};
 
   // NEU: Reseller-Aktionen Buttons
   const ResellerActionButtons = ({ reseller }) => {
@@ -232,16 +244,17 @@ const ResellerManagement = () => {
   };
 
   // Filter assignments
-  const filteredAssignments = assignments.filter(assignment => {
-    if (filterStatus === 'all') return true;
-    if (filterStatus === 'reversed') {
-      return assignment.notes && assignment.notes.includes('VERKAUF ZURÜCKGENOMMEN');
-    }
-    if (filterStatus === 'revoked') {
-      return assignment.status === 'returned';
-    }
-    return assignment.status === filterStatus;
-  });
+const filteredAssignments = assignments.filter(assignment => {
+  if (filterStatus === 'all') return true;
+  
+  // Spezielle Filter für Aktionen
+  if (filterStatus === 'reversed') {
+    return assignment.notes && assignment.notes.includes('VERKAUF ZURÜCKGENOMMEN');
+  }
+  
+  // Standard Status-Filter für neuen Workflow
+  return assignment.status === filterStatus;
+});
 
   // Statistiken berechnen
   const reversedSales = assignments.filter(a => 
@@ -337,7 +350,7 @@ const ResellerManagement = () => {
         </div>
 
         {/* Info Panel */}
-        {(reversedSales > 0 || revokedDevices > 0) && (
+        {/* {(reversedSales > 0 || revokedDevices > 0) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 lg:p-6 mb-6">
             <h3 className="text-base lg:text-lg font-medium text-blue-800 mb-3 flex items-center">
               <span className="mr-2">📊</span>
@@ -355,7 +368,7 @@ const ResellerManagement = () => {
               </p>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Tab Navigation */}
         <div className="border-b border-gray-200 mb-6">
@@ -433,11 +446,14 @@ const ResellerManagement = () => {
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="all">Alle Zuweisungen</option>
-                  <option value="assigned">Zugewiesen</option>
-                  <option value="received">Erhalten</option>
-                  <option value="sold">Verkauft</option>
-                  <option value="reversed">Zurückgenommene Verkäufe</option>
-                  <option value="returned">Zurückgezogene Geräte</option>
+                  <option value="assigned">📋 Zugewiesen</option>
+                  <option value="approved">🚀 Freigegeben</option>
+                  <option value="shipped">📦 Versendet</option>
+                  <option value="handed_over">🤝 Übergeben</option>
+                  <option value="received">✅ Erhalten</option>
+                  <option value="sold">💰 Verkauft</option>
+                  <option value="returned">📋 Zurückgezogen</option>
+                  <option value="reversed">↩️ Zurückgenommene Verkäufe</option>
                 </select>
               </>
             )}
@@ -745,13 +761,43 @@ const ResellerManagement = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 text-center">
+                          {assignment.status === 'assigned' && (
+                            <span className="text-yellow-600 text-sm font-medium">
+                              ⏳ Wartet auf Freigabe
+                            </span>
+                          )}
+                          
+                          {assignment.status === 'approved' && (
+                            <button
+                              onClick={() => {
+                                setSelectedShipping(assignment);
+                                setShowShippingModal(true);
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                            >
+                              📦 Versenden
+                            </button>
+                          )}
+                          
+                          {['shipped', 'handed_over'].includes(assignment.status) && (
+                            <span className="text-purple-600 text-sm font-medium">
+                              📦 {assignment.status === 'shipped' ? 'Versendet' : 'Übergeben'}
+                            </span>
+                          )}
+                          
                           {(assignment.status === 'assigned' || assignment.status === 'received') && (
                             <button
                               onClick={() => setRevokingAssignment(assignment._id)}
-                              className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                              className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors ml-2"
                             >
                               Zurückziehen
                             </button>
+                          )}
+                          
+                          {assignment.status === 'received' && (
+                            <span className="text-green-600 text-sm font-medium">
+                              ✅ Beim Reseller
+                            </span>
                           )}
                           
                           {assignment.status === 'sold' && (
@@ -884,27 +930,57 @@ const ResellerManagement = () => {
 
                   {/* Action Button */}
                   <div className="flex justify-end pt-3 border-t border-gray-200">
-                    {(assignment.status === 'assigned' || assignment.status === 'received') && (
-                      <button
-                        onClick={() => setRevokingAssignment(assignment._id)}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium transition duration-200"
-                      >
-                        Zurückziehen
-                      </button>
-                    )}
-                    
-                    {assignment.status === 'sold' && (
-                      <span className="text-green-600 text-sm font-medium">
-                        ✅ Abgeschlossen
-                      </span>
-                    )}
-                    
-                    {assignment.status === 'returned' && (
-                      <span className="text-gray-500 text-sm font-medium">
-                        📋 Zurückgezogen
-                      </span>
-                    )}
-                  </div>
+                  {assignment.status === 'assigned' && (
+                    <span className="text-yellow-600 text-sm font-medium">
+                      ⏳ Wartet auf Freigabe
+                    </span>
+                  )}
+                  
+                  {assignment.status === 'approved' && (
+                    <button
+                      onClick={() => {
+                        setSelectedShipping(assignment);
+                        setShowShippingModal(true);
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition duration-200"
+                    >
+                      📦 Versenden
+                    </button>
+                  )}
+                  
+                  {['shipped', 'handed_over'].includes(assignment.status) && (
+                    <span className="text-purple-600 text-sm font-medium">
+                      📦 {assignment.status === 'shipped' ? 'Versendet' : 'Übergeben'}
+                    </span>
+                  )}
+                  
+                  {(assignment.status === 'assigned' || assignment.status === 'received') && (
+                    <button
+                      onClick={() => setRevokingAssignment(assignment._id)}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium transition duration-200"
+                    >
+                      Zurückziehen
+                    </button>
+                  )}
+                  
+                  {assignment.status === 'received' && (
+                    <span className="text-green-600 text-sm font-medium">
+                      ✅ Beim Reseller
+                    </span>
+                  )}
+                  
+                  {assignment.status === 'sold' && (
+                    <span className="text-green-600 text-sm font-medium">
+                      ✅ Abgeschlossen
+                    </span>
+                  )}
+                  
+                  {assignment.status === 'returned' && (
+                    <span className="text-gray-500 text-sm font-medium">
+                      📋 Zurückgezogen
+                    </span>
+                  )}
+                </div>
                   
                   {/* Notes Section */}
                   {assignment.notes && (
@@ -1255,8 +1331,18 @@ const ResellerManagement = () => {
             </div>
           </div>
         )}
-
-        {/* Existing Modals */}
+      {/* Existing Modals */}
+      {showShippingModal && selectedShipping && (
+        <AdminShippingModal
+          assignment={selectedShipping}
+          onClose={() => {
+            setShowShippingModal(false);
+            setSelectedShipping(null);
+          }}
+          onShipped={handleShipped}
+        />
+      )}
+        
         {showCreateModal && (
           <CreateResellerModal
             onClose={() => setShowCreateModal(false)}

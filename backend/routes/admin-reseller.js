@@ -91,10 +91,10 @@ router.post('/assign-device', adminAuth, async (req, res) => {
   }
 });
 
-// NEU: Gerät-Erhalt bestätigen (für Reseller)
-router.post('/confirm-receipt/:assignmentId', async (req, res) => {
+router.post('/approve-shipping/:assignmentId', async (req, res) => {
   try {
     const { assignmentId } = req.params;
+    const { notes } = req.body; // Optional: Reseller-Notizen
     
     const assignment = await DeviceAssignment.findById(assignmentId)
       .populate('deviceId')
@@ -106,36 +106,221 @@ router.post('/confirm-receipt/:assignmentId', async (req, res) => {
 
     if (assignment.status !== 'assigned') {
       return res.status(400).json({ 
-        error: 'Gerät wurde bereits bestätigt oder ist nicht mehr verfügbar',
+        error: 'Gerät wurde bereits freigegeben oder ist nicht mehr verfügbar',
         currentStatus: assignment.status
       });
     }
 
     // Status aktualisieren
-    assignment.status = 'received';
-    assignment.receivedAt = new Date();
+    assignment.status = 'approved';
+    assignment.updatedAt = new Date();
+    
+    if (notes && notes.trim()) {
+      assignment.notes = (assignment.notes || '') + `\n\n[${new Date().toLocaleDateString('de-DE')}] Reseller-Notiz bei Freigabe: ${notes.trim()}`;
+    }
+    
     await assignment.save();
 
-    // NEU: E-Mail an Admin senden
-    console.log('📧 Sende Bestätigungs-E-Mail an Admin...');
+    // E-Mail an Admin
+    console.log('📧 Sende Freigabe-E-Mail an Admin...');
     try {
-      // Admin-E-Mail aus Umgebungsvariable oder Standard
       const adminEmail = process.env.ADMIN_EMAIL || 'admin@repairhub.ovh';
       
-      const emailResult = await emailService.sendAssignmentConfirmationToAdmin(
+      const emailResult = await emailService.sendShippingApprovalToAdmin(
         adminEmail,
         assignment.resellerId,
         assignment.deviceId,
-        assignment
+        assignment,
+        notes
       );
       
       if (emailResult.success) {
-        console.log('✅ Bestätigungs-E-Mail an Admin erfolgreich gesendet');
-      } else {
-        console.error('❌ Fehler beim Senden der Bestätigungs-E-Mail:', emailResult.error);
+        console.log('✅ Freigabe-E-Mail an Admin erfolgreich gesendet');
       }
     } catch (emailError) {
-      console.error('❌ Unerwarteter Fehler beim E-Mail-Versand:', emailError);
+      console.error('❌ Fehler beim E-Mail-Versand:', emailError);
+    }
+
+    res.json({
+      message: 'Versand freigegeben - Admin kann jetzt die Versandart wählen und versenden',
+      assignment: {
+        id: assignment._id,
+        status: assignment.status,
+        device: assignment.deviceId,
+        reseller: assignment.resellerId
+      }
+    });
+
+  } catch (error) {
+    console.error('Fehler bei der Versand-Freigabe:', error);
+    res.status(500).json({ error: 'Fehler bei der Versand-Freigabe' });
+  }
+});
+
+// 2. NEU: Admin versendet Gerät
+router.post('/ship-device/:assignmentId', adminAuth, async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { shippingMethod, trackingNumber, notes, estimatedDays, recipientAddress } = req.body;
+
+    if (!shippingMethod) {
+      return res.status(400).json({ error: 'Versandart ist erforderlich' });
+    }
+
+    if (shippingMethod === 'dhl' && !trackingNumber) {
+      return res.status(400).json({ error: 'DHL-Tracking-Nummer ist erforderlich' });
+    }
+
+    const assignment = await DeviceAssignment.findById(assignmentId)
+      .populate('deviceId')
+      .populate('resellerId');
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Zuweisung nicht gefunden' });
+    }
+
+    if (assignment.status !== 'approved') {
+      return res.status(400).json({ 
+        error: 'Gerät muss erst vom Reseller freigegeben werden',
+        currentStatus: assignment.status
+      });
+    }
+
+    const shippedAt = new Date();
+    let trackingUrl = null;
+    let estimatedDelivery = null;
+
+    // DHL Tracking URL generieren
+    if (shippingMethod === 'dhl' && trackingNumber) {
+      trackingUrl = `https://www.dhl.de/de/privatkunden/pakete-empfangen/verfolgen.html?piececode=${trackingNumber}`;
+      
+      // Geschätzte Lieferzeit berechnen
+      const deliveryDays = parseInt(estimatedDays) || 2;
+      estimatedDelivery = new Date();
+      estimatedDelivery.setDate(estimatedDelivery.getDate() + deliveryDays);
+    }
+
+    // Assignment aktualisieren
+    assignment.status = shippingMethod === 'pickup' ? 'handed_over' : 'shipped';
+    assignment.shippingInfo = {
+      method: shippingMethod,
+      trackingNumber: trackingNumber || null,
+      trackingUrl: trackingUrl,
+      shippedAt: shippedAt,
+      estimatedDelivery: estimatedDelivery,
+      shippedBy: req.admin._id,
+      recipientAddress: recipientAddress || null
+    };
+    
+    if (notes && notes.trim()) {
+      assignment.notes = (assignment.notes || '') + `\n\n[${new Date().toLocaleDateString('de-DE')}] Versand-Info: ${notes.trim()}`;
+    }
+    
+    assignment.updatedAt = new Date();
+    await assignment.save();
+
+    // E-Mail an Reseller
+    try {
+      const adminName = req.admin.name || req.admin.username;
+      const emailResult = await emailService.sendShippingNotificationToReseller(
+        assignment.resellerId,
+        assignment.deviceId,
+        assignment,
+        adminName
+      );
+      
+      if (emailResult.success) {
+        console.log('✅ Versand-E-Mail an Reseller erfolgreich gesendet');
+      }
+    } catch (emailError) {
+      console.error('❌ Fehler beim E-Mail-Versand:', emailError);
+    }
+
+    res.json({
+      message: shippingMethod === 'pickup' ? 'Persönliche Übergabe dokumentiert' : 'Gerät erfolgreich versendet',
+      assignment: {
+        id: assignment._id,
+        status: assignment.status,
+        shippingInfo: assignment.shippingInfo,
+        device: assignment.deviceId,
+        reseller: assignment.resellerId
+      }
+    });
+
+  } catch (error) {
+    console.error('Fehler beim Versand:', error);
+    res.status(500).json({ error: 'Fehler beim Versand' });
+  }
+});
+
+// 3. GEÄNDERT: Echten Erhalt bestätigen mit Bewertung
+router.post('/confirm-delivery/:assignmentId', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { condition, issues, notes } = req.body; // NEU: Strukturierte Daten
+    
+    const assignment = await DeviceAssignment.findById(assignmentId)
+      .populate('deviceId')
+      .populate('resellerId');
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Zuweisung nicht gefunden' });
+    }
+
+    if (!['shipped', 'handed_over'].includes(assignment.status)) {
+      return res.status(400).json({ 
+        error: 'Gerät muss erst versendet/übergeben worden sein',
+        currentStatus: assignment.status
+      });
+    }
+
+    const receivedAt = new Date();
+
+    // Status und Feedback aktualisieren
+    assignment.status = 'received';
+    assignment.deliveryFeedback = {
+      condition: condition || null,
+      issues: issues && issues.trim() ? issues.trim() : null,
+      receivedNotes: notes && notes.trim() ? notes.trim() : null,
+      receivedAt: receivedAt
+    };
+    
+    // Strukturierte Notizen hinzufügen
+    let receiptLog = `\n\n[${receivedAt.toLocaleString('de-DE')}] Erhalt bestätigt von ${assignment.resellerId.name}:`;
+    
+    if (condition) {
+      receiptLog += `\n• Zustand: ${condition}`;
+    }
+    
+    if (issues && issues.trim()) {
+      receiptLog += `\n• Probleme: ${issues.trim()}`;
+    }
+    
+    if (notes && notes.trim()) {
+      receiptLog += `\n• Notizen: ${notes.trim()}`;
+    }
+    
+    assignment.notes = (assignment.notes || '') + receiptLog;
+    assignment.updatedAt = new Date();
+    await assignment.save();
+
+    // E-Mail an Admin mit Zustandsbericht
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@repairhub.ovh';
+      
+      const emailResult = await emailService.sendDeliveryConfirmationToAdmin(
+        adminEmail,
+        assignment.resellerId,
+        assignment.deviceId,
+        assignment,
+        { condition, issues, notes }
+      );
+      
+      if (emailResult.success) {
+        console.log('✅ Erhalt-Bestätigung an Admin erfolgreich gesendet');
+      }
+    } catch (emailError) {
+      console.error('❌ Fehler beim E-Mail-Versand:', emailError);
     }
 
     res.json({
@@ -143,7 +328,9 @@ router.post('/confirm-receipt/:assignmentId', async (req, res) => {
       assignment: {
         id: assignment._id,
         status: assignment.status,
-        receivedAt: assignment.receivedAt,
+        receivedAt: receivedAt,
+        condition: condition,
+        hasIssues: !!(issues && issues.trim()),
         device: assignment.deviceId,
         reseller: assignment.resellerId
       }
@@ -189,23 +376,28 @@ router.post('/report-sale/:assignmentId', async (req, res) => {
       });
     }
 
-    // Assignment und Device aktualisieren
+    const soldAt = new Date();
+
+    // Assignment aktualisieren
     assignment.status = 'sold';
-    assignment.soldAt = new Date();
-    assignment.actualSalePrice = salePrice;
-    if (notes) {
-      assignment.notes = notes;
+    assignment.soldAt = soldAt;
+    assignment.actualSalePrice = salePrice; // Voller Verkaufspreis für Analysen
+    if (notes && notes.trim()) {
+      assignment.notes = (assignment.notes || '') + `\n\n[${soldAt.toLocaleDateString('de-DE')}] Verkauf: ${salePrice}€ (Reseller-Gewinn: ${salePrice - assignment.minimumPrice}€)`;
+      if (notes.trim()) {
+        assignment.notes += `\nNotizen: ${notes.trim()}`;
+      }
     }
     await assignment.save();
 
-    // Device als verkauft markieren
+    // KORRIGIERT: Device mit RepairHub-Gewinn aktualisieren (nicht Vollpreis!)
     await Device.findByIdAndUpdate(assignment.deviceId._id, {
       status: 'verkauft',
-      soldDate: new Date(),
-      actualSellingPrice: salePrice
+      soldDate: soldAt,
+      actualSellingPrice: assignment.minimumPrice // ✅ NUR DER REPAIRHUB-ANTEIL!
     });
 
-    // NEU: E-Mail an Admin senden
+    // E-Mail an Admin senden
     console.log('📧 Sende Verkaufs-E-Mail an Admin...');
     try {
       const adminEmail = process.env.ADMIN_EMAIL || 'admin@repairhub.ovh';
@@ -227,15 +419,15 @@ router.post('/report-sale/:assignmentId', async (req, res) => {
       console.error('❌ Unerwarteter Fehler beim E-Mail-Versand:', emailError);
     }
 
-    const profit = salePrice - assignment.minimumPrice;
+    const resellerProfit = salePrice - assignment.minimumPrice;
 
     res.json({
       message: 'Verkauf erfolgreich gemeldet',
       sale: {
         assignmentId: assignment._id,
-        salePrice: salePrice,
-        minimumPrice: assignment.minimumPrice,
-        resellerProfit: profit,
+        fullSalePrice: salePrice,           // Voller Verkaufspreis
+        repairHubRevenue: assignment.minimumPrice,  // RepairHub-Anteil
+        resellerProfit: resellerProfit,     // Reseller-Gewinn
         soldAt: assignment.soldAt,
         device: assignment.deviceId,
         reseller: assignment.resellerId

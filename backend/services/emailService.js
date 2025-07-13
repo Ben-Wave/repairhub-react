@@ -110,7 +110,7 @@ class EmailService {
           <div class="content">
             <h2>Hallo ${reseller.name}!</h2>
             
-            <p>Ihnen wurde ein neues Gerät zum Verkauf zugewiesen. Bestätigen Sie bitte den Erhalt, damit wir den Versand vorbereiten können.</p>
+            <p>Ihnen wurde ein neues Gerät zum Verkauf zugewiesen. Bestätigen Sie bitte den Erhalt.</p>
             
             <div class="device-card">
               <div style="overflow: hidden;">
@@ -715,7 +715,7 @@ Dieser Link ist 48 Stunden gültig.
 
   // Template für Passwort-Reset
   async sendPasswordReset(email, resetToken, userName = null) {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reseller/reset-password?token=${resetToken}`;
     
     const subject = '🔒 RepairHub - Passwort zurücksetzen';
     
@@ -775,6 +775,580 @@ Dieser Link ist 48 Stunden gültig.
     return await this.sendEmail(email, subject, htmlContent);
   }
 
+  // backend/services/emailService.js - ERWEITERN um neue Workflow-Funktionen
+// Diese Funktionen am Ende der EmailService-Klasse hinzufügen:
+
+  // NEU: E-Mail an Admin bei Versand-Freigabe durch Reseller
+  async sendShippingApprovalToAdmin(adminEmail, reseller, device, assignment, notes) {
+    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/resellers`;
+    
+    const subject = `🚀 Versand-Freigabe: ${device.brand} ${device.model} (${reseller.name})`;
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border-radius: 0 0 8px 8px; }
+          .approval-box { background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .device-info { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0; }
+          .button { 
+            display: inline-block; 
+            background: #2563eb; 
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            margin: 15px 0; 
+            font-weight: bold;
+          }
+          .action-box { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🚀 Versand-Freigabe erhalten</h1>
+            <p>RepairHub Admin-Benachrichtigung</p>
+          </div>
+          
+          <div class="content">
+            <div class="approval-box">
+              <h3 style="margin: 0 0 15px 0; color: #16a34a;">📦 Bereit zum Versand</h3>
+              <p style="margin: 0; color: #166534; font-size: 16px;">
+                <strong>${reseller.name}</strong> hat die Versand-Freigabe für das zugewiesene Gerät erteilt.
+              </p>
+            </div>
+            
+            <div class="device-info">
+              <h4 style="margin: 0 0 15px 0; color: #374151;">📱 Geräte-Details:</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div><strong>Modell:</strong><br>${device.brand} ${device.model}</div>
+                <div><strong>IMEI:</strong><br>${device.imei}</div>
+                <div><strong>Farbe:</strong><br>${device.color}</div>
+                <div><strong>Speicher:</strong><br>${device.storage}</div>
+                <div><strong>Zustand:</strong><br>${device.condition}</div>
+                <div><strong>Preis:</strong><br>€${device.price}</div>
+              </div>
+              ${device.damageDescription ? `
+                <div style="margin-top: 10px; padding: 10px; background: #fef3c7; border-radius: 4px;">
+                  <strong>Schadensbeschreibung:</strong><br>
+                  <span style="color: #92400e;">${device.damageDescription}</span>
+                </div>
+              ` : ''}
+            </div>
+            
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+              <h4 style="margin: 0 0 15px 0; color: #374151;">👤 Reseller-Details:</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div><strong>Name:</strong><br>${reseller.name}</div>
+                <div><strong>Username:</strong><br>@${reseller.username}</div>
+                <div><strong>E-Mail:</strong><br>${reseller.email}</div>
+                <div><strong>Freigabe am:</strong><br>${new Date().toLocaleString('de-DE')}</div>
+              </div>
+              ${reseller.phone ? `<div style="margin-top: 10px;"><strong>📱 Telefon:</strong> ${reseller.phone}</div>` : ''}
+              ${reseller.company ? `<div style="margin-top: 5px;"><strong>🏢 Firma:</strong> ${reseller.company}</div>` : ''}
+            </div>
+            
+            ${notes ? `
+              <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #92400e;">💬 Reseller-Notizen:</h4>
+                <p style="margin: 0; white-space: pre-wrap; color: #92400e;">${notes}</p>
+              </div>
+            ` : ''}
+            
+            <div class="action-box">
+              <h4 style="margin: 0 0 15px 0; color: #92400e;">📋 Nächste Schritte:</h4>
+              <ol style="margin: 0; padding-left: 20px; color: #92400e;">
+                <li><strong>Versandart wählen:</strong> DHL, persönliche Übergabe oder andere</li>
+                <li><strong>Bei DHL:</strong> Tracking-Nummer eingeben für automatischen Link</li>
+                <li><strong>Gerät verpacken</strong> und versenden/übergeben</li>
+                <li><strong>Versand dokumentieren</strong> - Reseller wird automatisch benachrichtigt</li>
+              </ol>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}" class="button">
+                📦 Versand jetzt durchführen
+              </a>
+            </div>
+            
+            <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 15px; margin: 20px 0;">
+              <h4 style="margin: 0 0 10px 0; color: #1d4ed8;">ℹ️ Versand-Optionen:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #1e40af; font-size: 14px;">
+                <li><strong>🚚 DHL:</strong> Automatischer Tracking-Link wird generiert</li>
+                <li><strong>🤝 Persönlich:</strong> Übergabe wird dokumentiert</li>
+                <li><strong>📮 Andere:</strong> Individuelle Versandart</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div style="text-align: center; color: #666; margin-top: 30px; font-size: 14px;">
+            <p>Automatische Benachrichtigung vom RepairHub-System</p>
+            <p>© ${new Date().getFullYear()} RepairHub</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+Versand-Freigabe erhalten - RepairHub
+
+${reseller.name} hat die Versand-Freigabe für das zugewiesene Gerät erteilt.
+
+Gerät: ${device.brand} ${device.model}
+IMEI: ${device.imei}
+Preis: €${device.price}
+
+Reseller: ${reseller.name} (@${reseller.username})
+E-Mail: ${reseller.email}
+Freigabe am: ${new Date().toLocaleString('de-DE')}
+
+${notes ? `Reseller-Notizen: ${notes}\n` : ''}
+
+Nächste Schritte:
+1. Versandart wählen (DHL, persönliche Übergabe, etc.)
+2. Gerät verpacken und versenden
+3. Versand im Admin-Dashboard dokumentieren
+
+Admin-Dashboard: ${dashboardUrl}
+
+© ${new Date().getFullYear()} RepairHub
+    `;
+
+    return await this.sendEmail(adminEmail, subject, htmlContent, textContent);
+  }
+
+  // NEU: E-Mail an Reseller bei Versand durch Admin
+  async sendShippingNotificationToReseller(reseller, device, assignment, adminName) {
+    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reseller/dashboard`;
+    const shipping = assignment.shippingInfo;
+    const isPickup = shipping.method === 'pickup';
+    const isDHL = shipping.method === 'dhl';
+    
+    const subject = isPickup 
+      ? `🤝 Persönliche Übergabe: ${device.brand} ${device.model}`
+      : `📦 Gerät versendet: ${device.brand} ${device.model}`;
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #059669; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border-radius: 0 0 8px 8px; }
+          .shipping-info { background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .tracking-box { background: white; border: 2px solid #2563eb; border-radius: 6px; padding: 15px; margin: 15px 0; text-align: center; }
+          .button { 
+            display: inline-block; 
+            background: #059669; 
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            margin: 15px 0; 
+            font-weight: bold;
+          }
+          .tracking-button { 
+            display: inline-block; 
+            background: #2563eb; 
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            margin: 10px 0; 
+            font-weight: bold;
+          }
+          .warning-box { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>${isPickup ? '🤝 Persönliche Übergabe' : '📦 Gerät versendet'}</h1>
+            <p>RepairHub Versand-Benachrichtigung</p>
+          </div>
+          
+          <div class="content">
+            <h2>Hallo ${reseller.name}!</h2>
+            
+            <p>${isPickup ? 
+              'Die persönliche Übergabe Ihres zugewiesenen Geräts wurde dokumentiert.' : 
+              'Ihr zugewiesenes Gerät wurde versendet und ist unterwegs zu Ihnen!'
+            }</p>
+            
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+              <h4 style="margin: 0 0 15px 0; color: #374151;">📱 Geräte-Details:</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div><strong>Modell:</strong><br>${device.brand} ${device.model}</div>
+                <div><strong>IMEI:</strong><br>${device.imei}</div>
+                <div><strong>Farbe:</strong><br>${device.color}</div>
+                <div><strong>Speicher:</strong><br>${device.storage}</div>
+              </div>
+            </div>
+            
+            <div class="shipping-info">
+              <h3 style="margin: 0 0 15px 0; color: #16a34a;">📦 Versand-Informationen</h3>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                  <strong>Versandart:</strong><br>
+                  ${isDHL ? '📦 DHL Paket' : isPickup ? '🤝 Persönliche Übergabe' : '📮 Andere Versandart'}
+                </div>
+                <div>
+                  <strong>Versendet am:</strong><br>
+                  ${new Date(shipping.shippedAt).toLocaleString('de-DE')}
+                </div>
+                <div>
+                  <strong>Versendet von:</strong><br>
+                  ${adminName}
+                </div>
+                ${shipping.estimatedDelivery ? `
+                <div>
+                  <strong>Geschätzte Lieferung:</strong><br>
+                  <span style="color: #16a34a; font-weight: bold;">
+                    ${new Date(shipping.estimatedDelivery).toLocaleDateString('de-DE')}
+                  </span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+            
+            ${isDHL && shipping.trackingNumber ? `
+              <div class="tracking-box">
+                <h4 style="margin: 0 0 10px 0; color: #2563eb;">📍 Sendungsverfolgung</h4>
+                <div style="font-family: monospace; font-size: 18px; font-weight: bold; color: #1e40af; margin: 10px 0;">
+                  ${shipping.trackingNumber}
+                </div>
+                ${shipping.trackingUrl ? `
+                  <a href="${shipping.trackingUrl}" target="_blank" class="tracking-button">
+                    🔍 Sendung verfolgen (DHL)
+                  </a>
+                ` : ''}
+                <p style="font-size: 14px; color: #64748b; margin: 10px 0 0 0;">
+                  Klicken Sie auf den Button für aktuelle Standort-Informationen
+                </p>
+              </div>
+            ` : ''}
+            
+            ${shipping.recipientAddress ? `
+              <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #374151;">📍 Lieferadresse:</h4>
+                <p style="margin: 0; white-space: pre-line; color: #6b7280;">${shipping.recipientAddress}</p>
+              </div>
+            ` : ''}
+            
+            <div class="warning-box">
+              <h4 style="margin: 0 0 15px 0; color: #92400e;">
+                ${isPickup ? '✅ Nach der Übergabe:' : '⚠️ Nach dem Erhalt:'}
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; color: #92400e;">
+                <li><strong>Erhalt im System bestätigen</strong> - Sehr wichtig!</li>
+                <li><strong>Gerät auf Vollständigkeit prüfen</strong></li>
+                <li><strong>Zustand bewerten</strong> und eventuelle Probleme melden</li>
+                <li><strong>Erst nach Bestätigung</strong> mit dem Verkauf beginnen</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}" class="button">
+                📊 Zum Reseller-Dashboard
+              </a>
+            </div>
+            
+            <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 15px; margin: 20px 0;">
+              <h4 style="margin: 0 0 10px 0; color: #1d4ed8;">💡 Verkaufs-Tipps:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #1e40af; font-size: 14px;">
+                <li>Das Gerät ist professionell repariert und verkaufsbereit</li>
+                <li>Sie können jeden Preis über dem Mindestpreis verlangen</li>
+                <li>Hochwertige Fotos steigern den Verkaufserfolg</li>
+                <li>Bei Fragen stehen wir Ihnen gerne zur Verfügung</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div style="text-align: center; color: #666; margin-top: 30px; font-size: 14px;">
+            <p>Automatische Versand-Benachrichtigung vom RepairHub-System</p>
+            <p>© ${new Date().getFullYear()} RepairHub</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+${isPickup ? 'Persönliche Übergabe dokumentiert' : 'Gerät versendet'} - RepairHub
+
+Hallo ${reseller.name}!
+
+${isPickup ? 
+  'Die persönliche Übergabe Ihres Geräts wurde dokumentiert.' : 
+  'Ihr Gerät wurde versendet und ist unterwegs!'
+}
+
+Gerät: ${device.brand} ${device.model}
+IMEI: ${device.imei}
+
+Versand-Informationen:
+- Versandart: ${isDHL ? 'DHL Paket' : isPickup ? 'Persönliche Übergabe' : 'Andere Versandart'}
+- Versendet am: ${new Date(shipping.shippedAt).toLocaleString('de-DE')}
+- Versendet von: ${adminName}
+
+${isDHL && shipping.trackingNumber ? `
+DHL Tracking-Nummer: ${shipping.trackingNumber}
+${shipping.trackingUrl ? `Tracking-Link: ${shipping.trackingUrl}` : ''}
+` : ''}
+
+${shipping.estimatedDelivery ? `Geschätzte Lieferung: ${new Date(shipping.estimatedDelivery).toLocaleDateString('de-DE')}` : ''}
+
+WICHTIG: Bestätigen Sie den Erhalt im System bevor Sie mit dem Verkauf beginnen!
+
+Reseller-Dashboard: ${dashboardUrl}
+
+© ${new Date().getFullYear()} RepairHub
+    `;
+
+    return await this.sendEmail(reseller.email, subject, htmlContent, textContent);
+  }
+
+  // NEU: E-Mail an Admin bei Erhalt-Bestätigung durch Reseller
+  async sendDeliveryConfirmationToAdmin(adminEmail, reseller, device, assignment, deliveryInfo) {
+    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/resellers`;
+    const hasIssues = deliveryInfo.issues && deliveryInfo.issues.trim();
+    const condition = deliveryInfo.condition || 'gut';
+    
+    const subject = hasIssues 
+      ? `⚠️ Erhalt mit Problemen: ${device.brand} ${device.model} (${reseller.name})`
+      : `✅ Erhalt bestätigt: ${device.brand} ${device.model} (${reseller.name})`;
+    
+    const conditionColors = {
+      'ausgezeichnet': { bg: '#f0fdf4', border: '#16a34a', text: '#15803d' },
+      'gut': { bg: '#f0fdf4', border: '#16a34a', text: '#15803d' },
+      'okay': { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+      'problematisch': { bg: '#fef2f2', border: '#dc2626', text: '#dc2626' }
+    };
+    
+    const conditionStyle = conditionColors[condition] || conditionColors['gut'];
+    
+    const conditionIcons = {
+      'ausgezeichnet': '⭐⭐⭐',
+      'gut': '⭐⭐',
+      'okay': '⭐',
+      'problematisch': '❌'
+    };
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: ${hasIssues ? '#dc2626' : '#059669'}; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border-radius: 0 0 8px 8px; }
+          .status-box { background: ${hasIssues ? '#fef2f2' : '#f0fdf4'}; border: 1px solid ${hasIssues ? '#fecaca' : '#bbf7d0'}; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .condition-box { background: ${conditionStyle.bg}; border: 1px solid ${conditionStyle.border}; border-radius: 6px; padding: 15px; margin: 15px 0; }
+          .issues-box { background: #fef2f2; border: 2px solid #dc2626; border-radius: 6px; padding: 15px; margin: 20px 0; }
+          .button { 
+            display: inline-block; 
+            background: ${hasIssues ? '#dc2626' : '#059669'}; 
+            color: white; 
+            padding: 12px 25px; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            margin: 15px 0; 
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>${hasIssues ? '⚠️ Erhalt mit Problemen' : '✅ Erhalt bestätigt'}</h1>
+            <p>RepairHub Admin-Benachrichtigung</p>
+          </div>
+          
+          <div class="content">
+            <div class="status-box">
+              <h3 style="margin: 0 0 15px 0; color: ${hasIssues ? '#dc2626' : '#16a34a'};">
+                ${hasIssues ? '⚠️ Probleme gemeldet' : '📦 Erfolgreich zugestellt'}
+              </h3>
+              <p style="margin: 0; color: ${hasIssues ? '#7f1d1d' : '#166534'}; font-size: 16px;">
+                <strong>${reseller.name}</strong> hat den Erhalt des Geräts bestätigt${hasIssues ? ' und Probleme gemeldet' : ''}.
+              </p>
+            </div>
+            
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+              <h4 style="margin: 0 0 15px 0; color: #374151;">📱 Geräte-Details:</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div><strong>Modell:</strong><br>${device.brand} ${device.model}</div>
+                <div><strong>IMEI:</strong><br>${device.imei}</div>
+                <div><strong>Farbe:</strong><br>${device.color}</div>
+                <div><strong>Speicher:</strong><br>${device.storage}</div>
+                <div><strong>Erhalt bestätigt:</strong><br>${new Date(assignment.receivedAt).toLocaleString('de-DE')}</div>
+                <div><strong>Status:</strong><br><span style="color: #059669;">Beim Reseller</span></div>
+              </div>
+            </div>
+            
+            <div class="condition-box">
+              <h4 style="margin: 0 0 15px 0; color: ${conditionStyle.text};">📋 Zustandsbericht</h4>
+              <div style="text-align: center; margin: 15px 0;">
+                <div style="font-size: 24px; margin-bottom: 5px;">
+                  ${conditionIcons[condition] || '⭐⭐'}
+                </div>
+                <div style="font-size: 18px; font-weight: bold; color: ${conditionStyle.text};">
+                  ${condition.charAt(0).toUpperCase() + condition.slice(1)}
+                </div>
+              </div>
+            </div>
+            
+            ${hasIssues ? `
+              <div class="issues-box">
+                <h4 style="margin: 0 0 15px 0; color: #dc2626;">⚠️ Gemeldete Probleme:</h4>
+                <div style="background: white; padding: 15px; border-radius: 4px; margin: 10px 0;">
+                  <p style="margin: 0; white-space: pre-wrap; color: #7f1d1d; font-weight: 500;">
+                    ${deliveryInfo.issues}
+                  </p>
+                </div>
+                <div style="background: #fee2e2; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                  <p style="margin: 0; color: #991b1b; font-size: 14px;">
+                    <strong>💡 Empfehlung:</strong> Kontaktieren Sie den Reseller zeitnah, um die Probleme zu klären.
+                  </p>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${deliveryInfo.notes && deliveryInfo.notes.trim() ? `
+              <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #374151;">💬 Zusätzliche Notizen:</h4>
+                <p style="margin: 0; white-space: pre-wrap; color: #4b5563;">${deliveryInfo.notes}</p>
+              </div>
+            ` : ''}
+            
+            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 15px 0;">
+              <h4 style="margin: 0 0 15px 0; color: #374151;">👤 Reseller-Details:</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div><strong>Name:</strong><br>${reseller.name}</div>
+                <div><strong>Username:</strong><br>@${reseller.username}</div>
+                <div><strong>E-Mail:</strong><br>${reseller.email}</div>
+                <div><strong>Zugewiesen am:</strong><br>${new Date(assignment.assignedAt).toLocaleDateString('de-DE')}</div>
+              </div>
+              ${reseller.phone ? `<div style="margin-top: 10px;"><strong>📱 Telefon:</strong> ${reseller.phone}</div>` : ''}
+            </div>
+            
+            ${assignment.shippingInfo ? `
+              <div style="background: #e0f2fe; border: 1px solid #0369a1; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #0369a1;">📦 Versand-Rückblick:</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; color: #0c4a6e; font-size: 14px;">
+                  <div><strong>Versandart:</strong><br>${
+                    assignment.shippingInfo.method === 'dhl' ? '📦 DHL Paket' :
+                    assignment.shippingInfo.method === 'pickup' ? '🤝 Persönliche Übergabe' :
+                    '📮 Andere Versandart'
+                  }</div>
+                  <div><strong>Versendet am:</strong><br>${new Date(assignment.shippingInfo.shippedAt).toLocaleDateString('de-DE')}</div>
+                  ${assignment.shippingInfo.trackingNumber ? `
+                  <div><strong>Tracking:</strong><br>${assignment.shippingInfo.trackingNumber}</div>
+                  ` : ''}
+                  <div><strong>Lieferzeit:</strong><br>${Math.ceil((new Date(assignment.receivedAt) - new Date(assignment.shippingInfo.shippedAt)) / (1000 * 60 * 60 * 24))} Tage</div>
+                </div>
+              </div>
+            ` : ''}
+            
+            <div style="background: ${hasIssues ? '#fef3c7' : '#eff6ff'}; border: 1px solid ${hasIssues ? '#f59e0b' : '#3b82f6'}; border-radius: 6px; padding: 15px; margin: 20px 0;">
+              <h4 style="margin: 0 0 15px 0; color: ${hasIssues ? '#92400e' : '#1d4ed8'};">
+                ${hasIssues ? '⚠️ Empfohlene Maßnahmen:' : '📋 Nächste Schritte:'}
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; color: ${hasIssues ? '#92400e' : '#1e40af'};">
+                ${hasIssues ? `
+                <li><strong>Reseller kontaktieren</strong> - Probleme besprechen</li>
+                <li><strong>Lösungsoptionen prüfen</strong> - Rückgabe, Austausch, Rabatt</li>
+                <li><strong>Dokumentation aktualisieren</strong> - Für zukünftige Referenz</li>
+                <li><strong>Qualitätskontrolle überprüfen</strong> - Ähnliche Probleme vermeiden</li>
+                ` : `
+                <li><strong>Reseller kann jetzt verkaufen</strong> - Gerät ist offiziell übergeben</li>
+                <li><strong>Verkaufs-Benachrichtigung</strong> - Automatisch bei Verkauf</li>
+                <li><strong>Gewinn-Abrechnung</strong> - Nach Verkaufsmeldung</li>
+                <li><strong>Feedback sammeln</strong> - Für weitere Optimierungen</li>
+                `}
+              </ul>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${dashboardUrl}" class="button">
+                📊 Zum Admin-Dashboard
+              </a>
+            </div>
+          </div>
+          
+          <div style="text-align: center; color: #666; margin-top: 30px; font-size: 14px;">
+            <p>Automatische Erhalt-Bestätigung vom RepairHub-System</p>
+            <p>© ${new Date().getFullYear()} RepairHub</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+${hasIssues ? 'Erhalt mit Problemen gemeldet' : 'Erhalt bestätigt'} - RepairHub
+
+${reseller.name} hat den Erhalt des Geräts bestätigt${hasIssues ? ' und Probleme gemeldet' : ''}.
+
+Gerät: ${device.brand} ${device.model}
+IMEI: ${device.imei}
+Erhalt bestätigt: ${new Date(assignment.receivedAt).toLocaleString('de-DE')}
+
+Zustandsbewertung: ${condition} ${conditionIcons[condition] || '⭐⭐'}
+
+${hasIssues ? `
+GEMELDETE PROBLEME:
+${deliveryInfo.issues}
+
+EMPFOHLENE MASSNAHMEN:
+- Reseller zeitnah kontaktieren
+- Lösungsoptionen besprechen (Rückgabe, Austausch, Rabatt)
+- Qualitätskontrolle überprüfen
+` : `
+STATUS: Gerät kann jetzt verkauft werden
+- Verkaufs-Benachrichtigung erfolgt automatisch
+- Gewinn-Abrechnung nach Verkaufsmeldung
+`}
+
+${deliveryInfo.notes && deliveryInfo.notes.trim() ? `
+Zusätzliche Notizen:
+${deliveryInfo.notes}
+` : ''}
+
+Reseller: ${reseller.name} (@${reseller.username})
+E-Mail: ${reseller.email}
+
+${assignment.shippingInfo ? `
+Versand-Rückblick:
+- Versandart: ${
+  assignment.shippingInfo.method === 'dhl' ? 'DHL Paket' :
+  assignment.shippingInfo.method === 'pickup' ? 'Persönliche Übergabe' :
+  'Andere Versandart'
+}
+- Versendet am: ${new Date(assignment.shippingInfo.shippedAt).toLocaleDateString('de-DE')}
+- Lieferzeit: ${Math.ceil((new Date(assignment.receivedAt) - new Date(assignment.shippingInfo.shippedAt)) / (1000 * 60 * 60 * 24))} Tage
+${assignment.shippingInfo.trackingNumber ? `- Tracking: ${assignment.shippingInfo.trackingNumber}` : ''}
+` : ''}
+
+Admin-Dashboard: ${dashboardUrl}
+
+© ${new Date().getFullYear()} RepairHub
+    `;
+
+    return await this.sendEmail(adminEmail, subject, htmlContent, textContent);
+  }
   // Test-E-Mail senden
   async sendTestEmail(email) {
     const subject = '🚀 RepairHub Test-Mail';

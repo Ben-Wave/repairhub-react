@@ -276,6 +276,8 @@ const resellerSchema = new mongoose.Schema({
   company: { type: String },
   phone: { type: String },
   isActive: { type: Boolean, default: true },
+  resetPasswordToken: { type: String },
+  resetPasswordExpiry: { type: Date },
   mustChangePassword: { type: Boolean, default: true },
   firstLogin: { type: Boolean, default: true },
   lastPasswordChange: { type: Date },
@@ -288,12 +290,48 @@ const deviceAssignmentSchema = new mongoose.Schema({
   resellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Reseller', required: true },
   assignedAt: { type: Date, default: Date.now },
   minimumPrice: { type: Number, required: true },
+  
+  // ERWEITERTE Status-Optionen
   status: { 
     type: String, 
-    enum: ['assigned', 'received', 'sold', 'returned'], 
+    enum: [
+      'assigned',        // Zugewiesen, wartet auf Freigabe
+      'approved',        // Vom Reseller freigegeben zum Versand
+      'shipped',         // Versendet (DHL/Paket)
+      'handed_over',     // Persönlich übergeben
+      'received',        // Vom Reseller als erhalten bestätigt
+      'sold',           // Verkauft
+      'returned'        // Zurückgezogen
+    ], 
     default: 'assigned' 
   },
-  receivedAt: { type: Date },
+  
+  // NEU: Versand-Informationen
+  shippingInfo: {
+    method: { 
+      type: String, 
+      enum: ['dhl', 'pickup', 'other']
+    },
+    trackingNumber: { type: String, default: null },
+    trackingUrl: { type: String, default: null },
+    shippedAt: { type: Date, default: null },
+    estimatedDelivery: { type: Date, default: null },
+    shippedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+    recipientAddress: { type: String, default: null }
+  },
+  
+  // NEU: Erhalt-Bewertung
+  deliveryFeedback: {
+    condition: { 
+      type: String, 
+      enum: ['ausgezeichnet', 'gut', 'okay', 'problematisch']
+    },
+    issues: { type: String, default: null },
+    receivedNotes: { type: String, default: null },
+    receivedAt: { type: Date, default: null }
+  },
+  
+  // Bestehende Felder
   soldAt: { type: Date },
   actualSalePrice: { type: Number },
   notes: { type: String },
